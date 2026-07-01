@@ -16,6 +16,11 @@ function ActivityIcon({ type, className }: { type: string; className?: string })
   return <Icon className={className} strokeWidth={2} />;
 }
 
+// Favicon lookups need a bare hostname — activity text can be a phrase like "Reading workato.com"
+function faviconDomain(url: string): string {
+  try { return new URL(url).hostname; } catch { return url; }
+}
+
 const FlowChart = dynamic(() => import("@/components/FlowChart"), { ssr: false });
 
 interface Tool {
@@ -254,7 +259,7 @@ function ActivityModal({ activity, focusUrl, onClose }: {
               <div key={i} className={`flex items-start gap-2.5 text-sm rounded-lg px-2 py-1.5 ${focused ? "bg-blue-500/15 border border-blue-500/30" : ""}`}>
                 {a.url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={`https://www.google.com/s2/favicons?domain=${a.text}&sz=64`} alt="" width={16} height={16}
+                  <img src={`https://www.google.com/s2/favicons?domain=${faviconDomain(a.url)}&sz=64`} alt="" width={16} height={16}
                     className="w-4 h-4 rounded mt-0.5 shrink-0 bg-white/10"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
                 ) : (
@@ -309,9 +314,13 @@ export default function SolutionPage() {
       if (rect.width === 0 && rect.height === 0) { setAskBtn(null); return; }
       setAskBtn({ text, top: rect.top + window.scrollY - 44, left: rect.left + window.scrollX + rect.width / 2 });
     }
+    function onSelectionChange() { if (!window.getSelection()?.toString().trim()) setAskBtn(null); }
     document.addEventListener("mouseup", onSelect);
-    document.addEventListener("selectionchange", () => { if (!window.getSelection()?.toString().trim()) setAskBtn(null); });
-    return () => document.removeEventListener("mouseup", onSelect);
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => {
+      document.removeEventListener("mouseup", onSelect);
+      document.removeEventListener("selectionchange", onSelectionChange);
+    };
   }, []);
 
   useEffect(() => {
