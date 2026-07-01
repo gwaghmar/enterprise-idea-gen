@@ -4,7 +4,22 @@ import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 const SIZES = ["Startup", "SMB", "Enterprise"];
-const STACKS = ["Google Workspace", "Microsoft 365", "Recommend for me", "Custom"];
+const STACKS = [
+  "Google Workspace",
+  "Microsoft 365",
+  "Salesforce",
+  "HubSpot",
+  "Slack",
+  "Notion",
+  "Jira / Atlassian",
+  "AWS",
+  "Azure",
+  "SAP",
+  "Shopify",
+  "Stripe",
+  "Recommend for me",
+  "Custom",
+];
 const BUDGETS = ["< $500/mo", "$500–2k/mo", "$2k+/mo"];
 const TIMELINES = ["ASAP", "1–3 months", "3–6 months"];
 
@@ -110,6 +125,34 @@ function Chips({ options, selected, onSelect }: {
   );
 }
 
+function MultiChips({ options, selected, onToggle, exclusive = [] }: {
+  options: string[];
+  selected: string[];
+  onToggle: (v: string) => void;
+  exclusive?: string[];
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((o) => {
+        const isSelected = selected.includes(o);
+        const isExclusive = exclusive.includes(o);
+        return (
+          <button key={o} type="button" onClick={() => onToggle(o)}
+            className={`px-4 py-1.5 rounded-full text-sm border transition-all ${
+              isSelected
+                ? isExclusive
+                  ? "bg-white/20 text-white border-white/50 font-medium"
+                  : "bg-white text-black border-white font-medium"
+                : "bg-transparent text-white/50 border-white/20 hover:border-white/50 hover:text-white/80"
+            }`}>
+            {o}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProgressRing({ progress }: { progress: number }) {
   const r = 80;
   const circ = 2 * Math.PI * r;
@@ -138,7 +181,7 @@ function ProgressRing({ progress }: { progress: number }) {
 export default function Home() {
   const [problem, setProblem] = useState("");
   const [size, setSize] = useState("");
-  const [stack, setStack] = useState("");
+  const [stacks, setStacks] = useState<string[]>([]);
   const [customStack, setCustomStack] = useState("");
   const [budget, setBudget] = useState("");
   const [timeline, setTimeline] = useState("");
@@ -150,7 +193,24 @@ export default function Home() {
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const isReady = problem.trim() && size && stack && budget && timeline;
+  function toggleStack(v: string) {
+    // "Recommend for me" is exclusive — selecting it clears everything else
+    if (v === "Recommend for me") {
+      setStacks(stacks.includes(v) ? [] : ["Recommend for me"]);
+      return;
+    }
+    // Any other selection clears "Recommend for me"
+    setStacks((prev) => {
+      const without = prev.filter((s) => s !== "Recommend for me");
+      return without.includes(v) ? without.filter((s) => s !== v) : [...without, v];
+    });
+  }
+
+  const resolvedStack = stacks.includes("Custom")
+    ? [...stacks.filter((s) => s !== "Custom"), customStack || "Custom stack"].join(", ")
+    : stacks.join(", ");
+
+  const isReady = problem.trim() && size && stacks.length > 0 && budget && timeline;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -166,7 +226,7 @@ export default function Home() {
     const context = {
       problem: problem.trim(),
       size,
-      stack: stack === "Custom" ? customStack || "Custom stack" : stack,
+      stack: resolvedStack,
       budget,
       timeline,
     };
@@ -325,12 +385,17 @@ export default function Home() {
               <Chips options={SIZES} selected={size} onSelect={setSize} />
             </div>
             <div className="space-y-2">
-              <p className="text-white/40 text-xs uppercase tracking-wider">Current stack</p>
-              <Chips options={STACKS} selected={stack} onSelect={setStack} />
-              {stack === "Custom" && (
+              <p className="text-white/40 text-xs uppercase tracking-wider">Current stack <span className="text-white/25 normal-case tracking-normal">(pick all that apply)</span></p>
+              <MultiChips
+                options={STACKS}
+                selected={stacks}
+                onToggle={toggleStack}
+                exclusive={["Recommend for me"]}
+              />
+              {stacks.includes("Custom") && (
                 <input type="text" value={customStack}
                   onChange={(e) => setCustomStack(e.target.value)}
-                  placeholder="e.g. Salesforce, SAP, custom Python backend..."
+                  placeholder="e.g. custom Python backend, legacy ERP..."
                   className="w-full bg-white/5 border border-white/15 rounded-xl px-4 py-2 text-white placeholder:text-white/30 text-sm focus:outline-none focus:border-white/40 mt-2"
                 />
               )}
