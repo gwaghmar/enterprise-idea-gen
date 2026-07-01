@@ -33,7 +33,27 @@ const STACKS = [
   "Shopify",
   "Stripe",
   "Recommend for me",
-  "Custom",
+];
+// Searchable catalog for the stack autocomplete — anything not listed can be
+// typed and added as a custom entry
+const STACK_CATALOG = [
+  "NetSuite", "Oracle ERP", "Workday", "QuickBooks", "Xero", "Zoho", "Sage",
+  "Monday.com", "Asana", "Trello", "ClickUp", "Airtable", "Smartsheet", "Basecamp",
+  "Zendesk", "Freshdesk", "Intercom", "ServiceNow", "PagerDuty",
+  "Okta", "Auth0", "Ping Identity", "OneLogin",
+  "GitHub", "GitLab", "Bitbucket", "Jenkins", "CircleCI", "Docker", "Kubernetes", "Terraform",
+  "Google Cloud (GCP)", "Snowflake", "Databricks", "BigQuery", "Redshift",
+  "Tableau", "Power BI", "Looker", "Qlik", "Segment", "Amplitude", "Mixpanel", "Google Analytics",
+  "Zapier", "Make (Integromat)", "Workato", "MuleSoft", "Boomi",
+  "Twilio", "SendGrid", "Mailchimp", "Marketo", "Pardot", "Braze", "Klaviyo",
+  "Microsoft Dynamics 365", "Microsoft Teams", "Confluence", "SharePoint",
+  "Dropbox", "Box", "DocuSign", "Adobe Acrobat Sign",
+  "Figma", "Miro", "Canva",
+  "Datadog", "Splunk", "New Relic", "Grafana",
+  "MongoDB", "PostgreSQL", "MySQL", "Redis", "Supabase", "Firebase",
+  "Vercel", "Netlify", "Heroku", "DigitalOcean",
+  "Workday HCM", "BambooHR", "Gusto", "ADP", "Rippling", "Deel",
+  "Coupa", "SAP Ariba", "Ironclad", "LinkSquares",
 ];
 const BUDGETS = ["< $500/mo", "$500–2k/mo", "$2k+/mo"];
 const TIMELINES = ["ASAP", "1–3 months", "3–6 months"];
@@ -201,6 +221,92 @@ function Combobox({ options, value, onChange, placeholder }: {
   );
 }
 
+// Searchable multi-select: type to filter the catalog, click (or Enter) to add;
+// unlisted tools are added verbatim as custom entries
+function MultiCombobox({ options, selected, onAdd, onRemove, placeholder }: {
+  options: string[];
+  selected: string[];
+  onAdd: (v: string) => void;
+  onRemove: (v: string) => void;
+  placeholder: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const filtered = options.filter((o) => !selected.includes(o) && (!q || o.toLowerCase().includes(q)));
+  const exactMatch = options.some((o) => o.toLowerCase() === q);
+  const canAddCustom = q.length > 1 && !exactMatch && !selected.some((s) => s.toLowerCase() === q);
+
+  function add(v: string) {
+    onAdd(v);
+    setQuery("");
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      {/* Chips sit above the input so the open dropdown never covers them */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {selected.map((s) => (
+            <span key={s} className="flex items-center gap-1.5 bg-white text-black text-sm font-medium rounded-full pl-4 pr-2 py-1.5">
+              {s}
+              <button type="button" onClick={() => onRemove(s)} aria-label={`Remove ${s}`}
+                className="text-black/40 hover:text-black transition-colors leading-none text-base">×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2 bg-white/5 border border-white/15 rounded-xl px-3 focus-within:border-white/40 transition-colors">
+        <Search className="w-4 h-4 text-white/30 shrink-0" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            if (filtered.length > 0) add(filtered[0]);
+            else if (canAddCustom) add(query.trim());
+          }}
+          placeholder={placeholder}
+          className="w-full bg-transparent py-2.5 text-white placeholder:text-white/30 text-sm focus:outline-none"
+        />
+      </div>
+      {open && (filtered.length > 0 || canAddCustom) && (
+        <ul className="absolute z-20 mt-1 w-full max-h-52 overflow-auto bg-[#121212] border border-white/15 rounded-xl py-1 shadow-2xl">
+          {filtered.slice(0, 30).map((o) => (
+            <li key={o}>
+              <button type="button" onClick={() => add(o)}
+                className="w-full text-left px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white">
+                {o}
+              </button>
+            </li>
+          ))}
+          {canAddCustom && (
+            <li>
+              <button type="button" onClick={() => add(query.trim())}
+                className="w-full text-left px-4 py-2 text-sm text-white/50 italic transition-colors hover:bg-white/10 hover:text-white">
+                Add &ldquo;{query.trim()}&rdquo;
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function MultiChips({ options, selected, onToggle, exclusive = [] }: {
   options: string[];
   selected: string[];
@@ -258,7 +364,7 @@ export default function Home() {
   const [problem, setProblem] = useState("");
   const [size, setSize] = useState("");
   const [stacks, setStacks] = useState<string[]>([]);
-  const [customStack, setCustomStack] = useState("");
+  const [extraStacks, setExtraStacks] = useState<string[]>([]);
   const [budget, setBudget] = useState("");
   const [timeline, setTimeline] = useState("");
   const [industry, setIndustry] = useState("");
@@ -282,6 +388,7 @@ export default function Home() {
     // "Recommend for me" is exclusive — selecting it clears everything else
     if (v === "Recommend for me") {
       setStacks((prev) => (prev.includes(v) ? [] : ["Recommend for me"]));
+      setExtraStacks([]);
       return;
     }
     // Any other selection clears "Recommend for me"
@@ -289,6 +396,11 @@ export default function Home() {
       const without = prev.filter((s) => s !== "Recommend for me");
       return without.includes(v) ? without.filter((s) => s !== v) : [...without, v];
     });
+  }
+
+  function addExtraStack(v: string) {
+    setExtraStacks((prev) => (prev.includes(v) ? prev : [...prev, v]));
+    setStacks((prev) => prev.filter((s) => s !== "Recommend for me"));
   }
 
   function toggleCompliance(v: string) {
@@ -302,11 +414,9 @@ export default function Home() {
     });
   }
 
-  const resolvedStack = stacks.includes("Custom")
-    ? [...stacks.filter((s) => s !== "Custom"), customStack || "Custom stack"].join(", ")
-    : stacks.join(", ");
+  const resolvedStack = [...stacks, ...extraStacks].join(", ");
 
-  const isReady = problem.trim() && size && stacks.length > 0 && budget && timeline && industry.trim() && team;
+  const isReady = problem.trim() && size && (stacks.length > 0 || extraStacks.length > 0) && budget && timeline && industry.trim() && team;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -580,13 +690,13 @@ export default function Home() {
                 onToggle={toggleStack}
                 exclusive={["Recommend for me"]}
               />
-              {stacks.includes("Custom") && (
-                <input type="text" value={customStack}
-                  onChange={(e) => setCustomStack(e.target.value)}
-                  placeholder="e.g. custom Python backend, legacy ERP..."
-                  className="w-full bg-white/5 border border-white/15 rounded-xl px-4 py-2 text-white placeholder:text-white/30 text-sm focus:outline-none focus:border-white/40 mt-2"
-                />
-              )}
+              <MultiCombobox
+                options={STACK_CATALOG}
+                selected={extraStacks}
+                onAdd={addExtraStack}
+                onRemove={(v) => setExtraStacks((prev) => prev.filter((s) => s !== v))}
+                placeholder="Search any other tool — NetSuite, Workday, Zendesk… or type your own"
+              />
             </div>
             <div className="space-y-2">
               <p className="text-white/40 text-xs uppercase tracking-wider">Monthly budget</p>
