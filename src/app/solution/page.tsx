@@ -3,6 +3,18 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import {
+  Search, Sparkles, FileText, Brain, CheckCircle2, Circle,
+  Lightbulb, Target, Clock, ArrowRight, ArrowUpRight, ArrowLeft, AlertTriangle, Square, Wand2,
+} from "lucide-react";
+
+const ACTIVITY_ICONS: Record<string, typeof Search> = {
+  search: Search, found: Sparkles, read: FileText, synth: Brain, done: CheckCircle2,
+};
+function ActivityIcon({ type, className }: { type: string; className?: string }) {
+  const Icon = ACTIVITY_ICONS[type] ?? Circle;
+  return <Icon className={className} strokeWidth={2} />;
+}
 
 const FlowChart = dynamic(() => import("@/components/FlowChart"), { ssr: false });
 
@@ -13,11 +25,29 @@ interface Tool {
 interface FlowNode { id: string; label: string; type: string; }
 interface FlowEdge { from: string; to: string; label?: string; }
 interface Phase { title: string; actions: string[]; nodes?: FlowNode[]; edges?: FlowEdge[]; }
+interface Stakeholder { role: string; team: string; responsibility: string; whenToContact: string; }
+interface Ticket { system: string; type: string; title: string; assignTo: string; }
+interface Permission { name: string; owner: string; why: string; }
+interface ITControl { name: string; action: string; }
+interface Risk { risk: string; severity: string; mitigation: string; }
+interface RolloutPlaybook { stakeholders?: Stakeholder[]; tickets?: Ticket[]; }
+interface Approvals { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[]; }
+interface VendorOutreach { howToReach?: string; email?: string; demoChecklist?: string[]; }
+interface TcoLineItem { item: string; type: string; cost: string; }
+interface Tco { lineItems?: TcoLineItem[]; oneTimeSetup?: string; monthlyRecurring?: string; firstYearTotal?: string; hiddenCosts?: string[]; }
+interface Kpi { metric: string; baseline?: string; target: string; timeframe?: string; }
+interface AdoptionStep { title: string; detail: string; }
+interface Alternative { name: string; summary: string; tools?: string[]; estimatedCost?: string; tradeoff?: string; }
 interface Solution {
   title: string; insight?: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
+  rolloutPlaybook?: RolloutPlaybook; approvals?: Approvals; vendorOutreach?: VendorOutreach;
+  tco?: Tco; kpis?: Kpi[]; adoptionPlan?: AdoptionStep[]; alternative?: Alternative;
 }
-interface Context { size: string; stack: string; budget: string; timeline: string; }
+interface Context {
+  size: string; stack: string; budget: string; timeline: string;
+  industry?: string; team?: string; seats?: string; techLevel?: string; compliance?: string;
+}
 interface SelectedItem { label: string; itemType: string; }
 
 const categoryColors: Record<string, string> = {
@@ -30,14 +60,40 @@ const categoryColors: Record<string, string> = {
 };
 
 // ─── Explain Popup ────────────────────────────────────────────────────────────
-function ExplainPopup({ item, solutionContext, onClose }: {
-  item: SelectedItem; solutionContext: string; onClose: () => void;
+function ExplainPopup({ item, solutionContext, fullSolution, onEdit, onClose }: {
+  item: SelectedItem; solutionContext: string;
+  fullSolution: Solution; onEdit: (s: Solution) => void; onClose: () => void;
 }) {
-  const [mode, setMode] = useState<"choose" | "explaining" | "asking">("choose");
+  const [mode, setMode] = useState<"choose" | "explaining" | "asking" | "editing">("choose");
   const [question, setQuestion] = useState("");
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editInstruction, setEditInstruction] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editDone, setEditDone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const editRef = useRef<HTMLInputElement>(null);
+
+  async function applyEdit() {
+    if (!editInstruction.trim()) return;
+    setEditing(true); setEditError("");
+    try {
+      const res = await fetch("/api/edit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ solution: fullSolution, instruction: editInstruction.trim(), selectedText: item.label }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.solution) throw new Error(data.error || "Edit failed");
+      onEdit(data.solution);
+      setEditDone(true);
+      setTimeout(onClose, 700);
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : "Could not apply that change.");
+    } finally {
+      setEditing(false);
+    }
+  }
 
   const streamExplain = useCallback(async (q?: string) => {
     setLoading(true); setResponse("");
@@ -65,6 +121,7 @@ function ExplainPopup({ item, solutionContext, onClose }: {
   }, [item, solutionContext]);
 
   useEffect(() => { if (mode === "asking" && inputRef.current) inputRef.current.focus(); }, [mode]);
+  useEffect(() => { if (mode === "editing" && editRef.current) editRef.current.focus(); }, [mode]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={onClose}>
@@ -81,6 +138,30 @@ function ExplainPopup({ item, solutionContext, onClose }: {
           <div className="flex flex-col gap-3 mt-2">
             <button onClick={() => { setMode("explaining"); streamExplain(); }} className="w-full bg-white text-black font-semibold rounded-xl py-3 text-sm hover:bg-white/90 transition-all">Explain this to me</button>
             <button onClick={() => setMode("asking")} className="w-full bg-white/8 border border-white/15 text-white font-medium rounded-xl py-3 text-sm hover:bg-white/12 transition-all">I have a question</button>
+            <button onClick={() => setMode("editing")} className="w-full bg-white/8 border border-white/15 text-white font-medium rounded-xl py-3 text-sm hover:bg-white/12 transition-all flex items-center justify-center gap-2">
+              <Wand2 className="w-4 h-4" />
+              Change this with AI
+            </button>
+          </div>
+        )}
+        {mode === "editing" && (
+          <div className="mt-2 space-y-3">
+            {editDone ? (
+              <div className="flex items-center gap-2 text-emerald-400 text-sm py-3"><CheckCircle2 className="w-4 h-4" /> Applied — updating your solution…</div>
+            ) : (
+              <>
+                <p className="text-white/50 text-xs">Describe the change — e.g. &ldquo;swap this for a cheaper tool&rdquo;, &ldquo;add a fourth phase&rdquo;, &ldquo;cut the cost estimate in half&rdquo;.</p>
+                <form onSubmit={(e) => { e.preventDefault(); applyEdit(); }} className="space-y-3">
+                  <input ref={editRef} value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)} placeholder="What should change?" disabled={editing}
+                    className="w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder:text-white/30 text-sm focus:outline-none focus:border-white/40 disabled:opacity-50" />
+                  {editError && <p className="text-red-400 text-xs">{editError}</p>}
+                  <button type="submit" disabled={!editInstruction.trim() || editing} className="w-full bg-white text-black font-semibold rounded-xl py-3 text-sm hover:bg-white/90 disabled:opacity-40 transition-all flex items-center justify-center gap-2">
+                    {editing ? <><span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />Applying…</> : "Apply change"}
+                  </button>
+                </form>
+                <p className="text-white/25 text-xs">Updates this solution in place. Re-export or re-share to save the change.</p>
+              </>
+            )}
           </div>
         )}
         {mode === "asking" && !response && (
@@ -151,12 +232,55 @@ function ROICalculator({ estimatedCost }: { estimatedCost: string }) {
   );
 }
 
+// ─── Activity Trace Modal ─────────────────────────────────────────────────────
+function ActivityModal({ activity, focusUrl, onClose }: {
+  activity: { type: string; text: string; url?: string }[]; focusUrl: string | null; onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+      <div className="relative bg-[#0d0d0d] border border-white/15 rounded-2xl p-6 max-w-lg w-full shadow-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <p className="text-white/40 text-xs uppercase tracking-wider mb-1">How AI built this</p>
+            <p className="text-white font-semibold">Research activity</p>
+          </div>
+          <button onClick={onClose} className="text-white/30 hover:text-white/70 ml-4 text-2xl leading-none">×</button>
+        </div>
+        <div className="overflow-y-auto space-y-2.5 pr-1">
+          {activity.map((a, i) => {
+            const focused = focusUrl && a.url === focusUrl;
+            return (
+              <div key={i} className={`flex items-start gap-2.5 text-sm rounded-lg px-2 py-1.5 ${focused ? "bg-blue-500/15 border border-blue-500/30" : ""}`}>
+                {a.url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`https://www.google.com/s2/favicons?domain=${a.text}&sz=64`} alt="" width={16} height={16}
+                    className="w-4 h-4 rounded mt-0.5 shrink-0 bg-white/10"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                ) : (
+                  <ActivityIcon type={a.type} className="w-4 h-4 mt-0.5 shrink-0 text-white/45" />
+                )}
+                {a.url
+                  ? <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-blue-300/90 hover:text-blue-200 leading-snug break-all">{a.text}</a>
+                  : <span className="text-white/70 leading-snug">{a.text}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Solution Page ───────────────────────────────────────────────────────
 export default function SolutionPage() {
   const [solution, setSolution] = useState<Solution | null>(null);
   const [problem, setProblem] = useState("");
   const [context, setContext] = useState<Context | null>(null);
   const [citations, setCitations] = useState<string[]>([]);
+  const [activity, setActivity] = useState<{ type: string; text: string; url?: string }[]>([]);
+  const [activityFocus, setActivityFocus] = useState<string | null>(null);
+  const [showActivity, setShowActivity] = useState(false);
   const [model, setModel] = useState("");
   const [tokens, setTokens] = useState<number | null>(null);
   const [paying, setPaying] = useState(false);
@@ -167,8 +291,28 @@ export default function SolutionPage() {
   const [sharing, setSharing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [roiData, setRoiData] = useState<{ weeklyHours: number; teamSize: number; hourlyRate: number } | null>(null);
+  const [askBtn, setAskBtn] = useState<{ text: string; top: number; left: number } | null>(null);
   const router = useRouter();
   const rawDataRef = useRef<Record<string, unknown>>({});
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Show a floating "Ask AI" button when the user selects text inside the report
+  useEffect(() => {
+    function onSelect() {
+      const sel = window.getSelection();
+      const text = sel?.toString().trim() ?? "";
+      if (!sel || text.length < 3 || text.length > 600 || sel.rangeCount === 0) { setAskBtn(null); return; }
+      const range = sel.getRangeAt(0);
+      const container = contentRef.current;
+      if (!container || !container.contains(range.commonAncestorContainer)) { setAskBtn(null); return; }
+      const rect = range.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) { setAskBtn(null); return; }
+      setAskBtn({ text, top: rect.top + window.scrollY - 44, left: rect.left + window.scrollX + rect.width / 2 });
+    }
+    document.addEventListener("mouseup", onSelect);
+    document.addEventListener("selectionchange", () => { if (!window.getSelection()?.toString().trim()) setAskBtn(null); });
+    return () => document.removeEventListener("mouseup", onSelect);
+  }, []);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("solution");
@@ -179,6 +323,7 @@ export default function SolutionPage() {
     setProblem(data.problem);
     setContext(data.context ?? null);
     setCitations(data.citations ?? []);
+    setActivity(data.activity ?? []);
     setModel(data.model ?? "");
     setTokens(data.tokens ?? null);
   }, [router]);
@@ -188,6 +333,13 @@ export default function SolutionPage() {
     : "";
 
   function pick(label: string, itemType: string) { setSelectedItem({ label, itemType }); }
+
+  function handleSolutionEdit(updated: Solution) {
+    setSolution(updated);
+    rawDataRef.current = { ...rawDataRef.current, solution: updated };
+    try { sessionStorage.setItem("solution", JSON.stringify(rawDataRef.current)); } catch { /* ignore quota */ }
+    setShareUrl(null); // invalidate any prior share link — content changed
+  }
 
   async function handleShare() {
     if (shareUrl) { navigator.clipboard.writeText(shareUrl); return; }
@@ -241,13 +393,27 @@ export default function SolutionPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {selectedItem && <ExplainPopup item={selectedItem} solutionContext={solutionContext} onClose={() => setSelectedItem(null)} />}
+      {selectedItem && <ExplainPopup item={selectedItem} solutionContext={solutionContext} fullSolution={solution} onEdit={handleSolutionEdit} onClose={() => setSelectedItem(null)} />}
+      {showActivity && <ActivityModal activity={activity} focusUrl={activityFocus} onClose={() => { setShowActivity(false); setActivityFocus(null); }} />}
 
-      <div className="max-w-5xl mx-auto px-6 py-12">
+      {/* Floating "Ask AI" button on text selection */}
+      {askBtn && (
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { pick(askBtn.text, "Selected text"); setAskBtn(null); window.getSelection()?.removeAllRanges(); }}
+          style={{ position: "absolute", top: askBtn.top, left: askBtn.left, transform: "translateX(-50%)" }}
+          className="z-40 flex items-center gap-1.5 bg-white text-black text-xs font-semibold rounded-full px-3 py-1.5 shadow-xl shadow-black/40 hover:bg-white/90 transition-all animate-in fade-in"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          Ask AI
+        </button>
+      )}
+
+      <div ref={contentRef} className="max-w-5xl mx-auto px-6 py-12">
 
         {/* Top nav */}
         <div className="flex items-center justify-between mb-8">
-          <a href="/" className="text-white/40 text-sm hover:text-white/70 transition-colors">← New solution</a>
+          <a href="/" className="text-white/40 text-sm hover:text-white/70 transition-colors flex items-center gap-1.5"><ArrowLeft className="w-4 h-4" /> New solution</a>
           <div className="flex gap-2">
             <button onClick={handleShare} disabled={sharing}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm border border-white/15 text-white/60 hover:text-white hover:border-white/30 disabled:opacity-50 transition-all">
@@ -263,9 +429,11 @@ export default function SolutionPage() {
         {/* Context badges */}
         {context && (
           <div className="flex flex-wrap gap-2 mb-8">
-            {[context.size, context.stack, context.budget, context.timeline].map((v, i) => (
-              <span key={i} className="text-xs bg-white/8 border border-white/15 rounded-full px-3 py-1 text-white/50">{v}</span>
-            ))}
+            {[context.industry, context.size, context.team, context.seats ? `${context.seats} seats` : "", context.stack, context.budget, context.timeline, context.techLevel, context.compliance]
+              .filter((v) => v && v !== "Not specified" && v !== "Not provided")
+              .map((v, i) => (
+                <span key={i} className="text-xs bg-white/8 border border-white/15 rounded-full px-3 py-1 text-white/50">{v}</span>
+              ))}
           </div>
         )}
 
@@ -279,7 +447,7 @@ export default function SolutionPage() {
         <h1 className="text-4xl font-bold mb-4">{solution.title}</h1>
         {solution.insight && (
           <div className="flex gap-3 bg-white/5 border border-white/15 rounded-xl px-5 py-4 mb-6 max-w-3xl">
-            <span className="text-white/40 text-lg shrink-0">💡</span>
+            <Lightbulb className="w-5 h-5 text-yellow-400/70 shrink-0" />
             <p className="text-white/80 text-sm leading-relaxed italic">{solution.insight}</p>
           </div>
         )}
@@ -309,6 +477,60 @@ export default function SolutionPage() {
           <ROICalculator estimatedCost={solution.estimatedCost} />
         </div>
 
+        {/* Total Cost of Ownership */}
+        {solution.tco && (solution.tco.lineItems?.length || solution.tco.firstYearTotal) && (
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Total Cost of Ownership</h2>
+            <p className="text-white/40 text-sm mb-4">The real number — setup, recurring, and the costs most teams forget.</p>
+            <div className="bg-white/3 border border-white/10 rounded-2xl p-5">
+              {solution.tco.lineItems && solution.tco.lineItems.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-white/10 mb-5">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-white/5 text-white/40 text-xs uppercase tracking-wider">
+                        <th className="text-left font-medium px-4 py-2.5">Item</th>
+                        <th className="text-left font-medium px-4 py-2.5">Type</th>
+                        <th className="text-right font-medium px-4 py-2.5">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {solution.tco.lineItems.map((li, i) => (
+                        <tr key={i} className="border-t border-white/8">
+                          <td className="px-4 py-2.5 text-white/80">{li.item}</td>
+                          <td className="px-4 py-2.5 text-white/45">{li.type}</td>
+                          <td className="px-4 py-2.5 text-white/80 text-right tabular-nums">{li.cost}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { label: "One-time setup", value: solution.tco.oneTimeSetup },
+                  { label: "Monthly recurring", value: solution.tco.monthlyRecurring },
+                  { label: "First-year total", value: solution.tco.firstYearTotal, highlight: true },
+                ].filter((m) => m.value).map((m) => (
+                  <div key={m.label} className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
+                    <p className="text-white/40 text-xs mb-1">{m.label}</p>
+                    <p className={`font-bold text-base ${m.highlight ? "text-emerald-400" : "text-white"}`}>{m.value}</p>
+                  </div>
+                ))}
+              </div>
+              {solution.tco.hiddenCosts && solution.tco.hiddenCosts.length > 0 && (
+                <div className="mt-4 border-t border-white/10 pt-3">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Hidden costs to budget for</p>
+                  <ul className="space-y-1">
+                    {solution.tco.hiddenCosts.map((c, i) => (
+                      <li key={i} className="flex gap-2 text-sm text-white/60"><AlertTriangle className="w-4 h-4 text-yellow-500/70 shrink-0 mt-0.5" /><span>{c}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Tools */}
         <div className="mb-12">
           <h2 className="text-xl font-semibold mb-4">Recommended Tools</h2>
@@ -330,7 +552,7 @@ export default function SolutionPage() {
                         <p className="text-white/70 text-sm">{tool.whyForYou}</p>
                       </div>
                     )}
-                    <p className="text-xs text-white/25 group-hover:text-white/50 transition-colors pt-1">Click to learn more →</p>
+                    <p className="text-xs text-white/25 group-hover:text-white/50 transition-colors pt-1 flex items-center gap-1">Click to learn more <ArrowRight className="w-3 h-3" /></p>
                   </button>
                   {/* Vendor questions toggle */}
                   {tool.vendorQuestions && tool.vendorQuestions.length > 0 && (
@@ -357,6 +579,34 @@ export default function SolutionPage() {
             })}
           </div>
         </div>
+
+        {/* Alternative — Option B */}
+        {solution.alternative && solution.alternative.name && (
+          <div className="mb-12">
+            <div className="bg-white/3 border border-dashed border-white/20 rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs px-2 py-0.5 rounded-full border border-white/20 text-white/50">Alternative</span>
+                <h2 className="text-lg font-semibold">{solution.alternative.name}</h2>
+              </div>
+              <p className="text-white/60 text-sm mb-3">{solution.alternative.summary}</p>
+              {solution.alternative.tools && solution.alternative.tools.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {solution.alternative.tools.map((t, i) => (
+                    <span key={i} className="text-xs bg-white/8 border border-white/15 rounded-full px-3 py-1 text-white/60">{t}</span>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-col sm:flex-row gap-3 text-sm">
+                {solution.alternative.estimatedCost && (
+                  <div className="flex-1"><span className="text-white/40 text-xs uppercase tracking-wider">Cost</span><p className="text-white/70">{solution.alternative.estimatedCost}</p></div>
+                )}
+                {solution.alternative.tradeoff && (
+                  <div className="flex-1"><span className="text-white/40 text-xs uppercase tracking-wider">Tradeoff</span><p className="text-white/70">{solution.alternative.tradeoff}</p></div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Implementation phases with per-phase flowcharts */}
         {solution.phases && solution.phases.length > 0 && (
@@ -399,26 +649,236 @@ export default function SolutionPage() {
           </div>
         )}
 
+        {/* Success Metrics / KPIs */}
+        {solution.kpis && solution.kpis.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Success Metrics</h2>
+            <p className="text-white/40 text-sm mb-4">How you&apos;ll know it worked — measurable, with a baseline and a deadline.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {solution.kpis.map((k, i) => (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <p className="text-white font-medium text-sm mb-2">{k.metric}</p>
+                  <div className="flex items-center gap-2 text-sm">
+                    {k.baseline && <span className="text-white/40 line-through">{k.baseline}</span>}
+                    {k.baseline && <ArrowRight className="w-3.5 h-3.5 text-white/30 shrink-0" />}
+                    <span className="text-emerald-400 font-semibold">{k.target}</span>
+                  </div>
+                  {k.timeframe && <p className="text-white/35 text-xs mt-2 flex items-center gap-1.5"><Target className="w-3.5 h-3.5" /> {k.timeframe}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Adoption Plan */}
+        {solution.adoptionPlan && solution.adoptionPlan.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Adoption Plan</h2>
+            <p className="text-white/40 text-sm mb-4">Stop it becoming shelfware — how to get your team actually using it.</p>
+            <div className="space-y-2">
+              {solution.adoptionPlan.map((a, i) => (
+                <div key={i} className="flex gap-3 bg-white/5 border border-white/10 rounded-xl p-4">
+                  <span className="w-6 h-6 rounded-full bg-white/15 text-white text-xs flex items-center justify-center font-semibold shrink-0">{i + 1}</span>
+                  <div>
+                    <p className="text-white text-sm font-medium">{a.title}</p>
+                    <p className="text-white/55 text-sm mt-0.5">{a.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Internal Rollout Playbook */}
+        {solution.rolloutPlaybook && (
+          (solution.rolloutPlaybook.stakeholders?.length || solution.rolloutPlaybook.tickets?.length) ? (
+            <div className="mb-12">
+              <h2 className="text-xl font-semibold mb-1">Internal Rollout Playbook</h2>
+              <p className="text-white/40 text-sm mb-4">Who to loop in and what to file to get this approved inside your company.</p>
+
+              {solution.rolloutPlaybook.stakeholders && solution.rolloutPlaybook.stakeholders.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Who to involve</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {solution.rolloutPlaybook.stakeholders.map((s, i) => (
+                      <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="font-semibold text-white text-sm">{s.role}</span>
+                          {s.team && <span className="text-xs px-2 py-0.5 rounded-full border border-white/20 text-white/50 shrink-0">{s.team}</span>}
+                        </div>
+                        <p className="text-white/60 text-sm">{s.responsibility}</p>
+                        {s.whenToContact && <p className="text-white/35 text-xs mt-2 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {s.whenToContact}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {solution.rolloutPlaybook.tickets && solution.rolloutPlaybook.tickets.length > 0 && (
+                <div>
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Tickets to file</p>
+                  <div className="space-y-2">
+                    {solution.rolloutPlaybook.tickets.map((t, i) => (
+                      <div key={i} className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-xl p-4">
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0 mt-0.5">{t.system}</span>
+                        <div className="min-w-0">
+                          <p className="text-white text-sm font-medium">{t.title}</p>
+                          <p className="text-white/45 text-xs mt-0.5 flex items-center gap-1">{t.type}{t.assignTo && <><span className="text-white/25">·</span><ArrowRight className="w-3 h-3" />{t.assignTo}</>}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null
+        )}
+
+        {/* Approvals & Red Tape */}
+        {solution.approvals && (
+          (solution.approvals.permissions?.length || solution.approvals.itControls?.length || solution.approvals.riskAssessment?.length) ? (
+            <div className="mb-12">
+              <h2 className="text-xl font-semibold mb-1">Approvals & IT Red Tape</h2>
+              <p className="text-white/40 text-sm mb-4">Permissions, IT controls, and the risk review you&apos;ll need to clear.</p>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {solution.approvals.permissions && solution.approvals.permissions.length > 0 && (
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                    <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Permissions to secure</p>
+                    <ul className="space-y-3">
+                      {solution.approvals.permissions.map((p, i) => (
+                        <li key={i} className="text-sm">
+                          <p className="text-white font-medium">{p.name}</p>
+                          <p className="text-white/50 text-xs mt-0.5">{p.why}{p.owner ? ` · Owner: ${p.owner}` : ""}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {solution.approvals.itControls && solution.approvals.itControls.length > 0 && (
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                    <p className="text-white/40 text-xs uppercase tracking-wider mb-3">IT controls (Netskope, IP allow-list, SSO…)</p>
+                    <ul className="space-y-3">
+                      {solution.approvals.itControls.map((c, i) => (
+                        <li key={i} className="text-sm">
+                          <p className="text-white font-medium">{c.name}</p>
+                          <p className="text-white/50 text-xs mt-0.5">{c.action}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {solution.approvals.riskAssessment && solution.approvals.riskAssessment.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Risk assessment</p>
+                  <div className="space-y-2">
+                    {solution.approvals.riskAssessment.map((r, i) => {
+                      const sev = (r.severity || "").toLowerCase();
+                      const sevClass = sev.includes("high") ? "bg-red-500/20 text-red-300 border-red-500/30"
+                        : sev.includes("med") ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/30"
+                        : "bg-green-500/20 text-green-300 border-green-500/30";
+                      return (
+                        <div key={i} className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-xl p-4">
+                          <span className={`text-xs px-2 py-0.5 rounded-full border shrink-0 mt-0.5 ${sevClass}`}>{r.severity || "—"}</span>
+                          <div>
+                            <p className="text-white text-sm">{r.risk}</p>
+                            <p className="text-white/50 text-xs mt-1"><span className="text-white/35">Mitigation:</span> {r.mitigation}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null
+        )}
+
+        {/* Vendor Outreach Kit */}
+        {solution.vendorOutreach && (solution.vendorOutreach.howToReach || solution.vendorOutreach.email || solution.vendorOutreach.demoChecklist?.length) && (
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Vendor Outreach Kit</h2>
+            <p className="text-white/40 text-sm mb-4">How to reach the vendor and what to pin down before you buy.</p>
+
+            {solution.vendorOutreach.howToReach && (
+              <p className="text-white/60 text-sm mb-4">{solution.vendorOutreach.howToReach}</p>
+            )}
+
+            {solution.vendorOutreach.email && (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-white/40 text-xs uppercase tracking-wider">Ready-to-send intro email</p>
+                  <button onClick={() => navigator.clipboard.writeText(solution.vendorOutreach!.email!)}
+                    className="text-xs text-white/40 hover:text-white/80 transition-colors">Copy</button>
+                </div>
+                <pre className="text-white/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">{solution.vendorOutreach.email}</pre>
+              </div>
+            )}
+
+            {solution.vendorOutreach.demoChecklist && solution.vendorOutreach.demoChecklist.length > 0 && (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Demo-call checklist</p>
+                <ul className="space-y-2">
+                  {solution.vendorOutreach.demoChecklist.map((q, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-white/60">
+                      <Square className="w-3.5 h-3.5 text-white/25 shrink-0 mt-0.5" /><span>{q}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* How AI built this */}
         <div className="mb-12 bg-white/3 border border-white/10 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-white/40">How AI built this</h2>
-            {citations.length > 0 && (
-              <button onClick={() => setShowSources(!showSources)} className="text-xs text-white/40 hover:text-white/70 transition-colors">
-                {showSources ? "Hide" : "Show"} {citations.length} sources
-              </button>
-            )}
+            <div className="flex items-center gap-4">
+              {activity.length > 0 && (
+                <button onClick={() => { setActivityFocus(null); setShowActivity(true); }} className="text-xs text-white/40 hover:text-white/70 transition-colors">
+                  View activity
+                </button>
+              )}
+              {citations.length > 0 && (
+                <button onClick={() => setShowSources(!showSources)} className="text-xs text-white/40 hover:text-white/70 transition-colors">
+                  {showSources ? "Hide" : "Show"} {citations.length} sources
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap gap-4 text-sm text-white/50 mb-3">
             {model && <span>Pipeline: <span className="text-white/70">{model}</span></span>}
             {tokens && <span>Tokens used: <span className="text-white/70">{tokens.toLocaleString()}</span></span>}
           </div>
           {showSources && citations.length > 0 && (
-            <ul className="space-y-1 border-t border-white/10 pt-3">
-              {citations.map((url, i) => (
-                <li key={i}><a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 truncate block">{url}</a></li>
-              ))}
-            </ul>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border-t border-white/10 pt-3">
+              {citations.map((url, i) => {
+                let host = url;
+                try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep raw */ }
+                const openTrace = () => { setActivityFocus(url); setShowActivity(true); };
+                return (
+                  <div key={i}
+                    onClick={activity.length > 0 ? openTrace : undefined}
+                    className={`group flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 hover:border-white/25 hover:bg-white/8 transition-all ${activity.length > 0 ? "cursor-pointer" : ""}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`https://www.google.com/s2/favicons?domain=${host}&sz=64`} alt="" width={20} height={20}
+                      className="w-5 h-5 rounded shrink-0 bg-white/10"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                    <div className="min-w-0">
+                      <p className="text-sm text-white/80 group-hover:text-white truncate">{host}</p>
+                      <p className="text-xs text-white/35 truncate">{url.replace(/^https?:\/\//, "")}</p>
+                    </div>
+                    {activity.length > 0 && <span className="ml-auto text-white/25 group-hover:text-white/60 text-xs transition-colors shrink-0">trace</span>}
+                    <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                      className="text-white/20 group-hover:text-white/50 transition-colors shrink-0" title="Open source"><ArrowUpRight className="w-4 h-4" /></a>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
