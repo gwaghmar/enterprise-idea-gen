@@ -1,5 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import OpenAI from "openai";
+
+const encoder = new TextEncoder();
+
+function send(controller: ReadableStreamDefaultController, data: object) {
+  controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+}
 
 async function jinaFetch(url: string): Promise<string> {
   try {
@@ -14,11 +20,13 @@ async function jinaFetch(url: string): Promise<string> {
   }
 }
 
+export const maxDuration = 120;
+
 export async function POST(req: NextRequest) {
   const { problem, size, stack, budget, timeline } = await req.json();
 
   if (!problem) {
-    return NextResponse.json({ error: "Problem is required" }, { status: 400 });
+    return new Response(JSON.stringify({ error: "Problem is required" }), { status: 400 });
   }
 
   const openrouter = new OpenAI({
@@ -28,9 +36,17 @@ export async function POST(req: NextRequest) {
 
   const userContext = `Company: ${size} | Stack: ${stack} | Budget: ${budget} | Timeline: ${timeline}`;
 
-  // Step 1 — Perplexity searches the web
-  const searchPrompt = `Research the best enterprise solution for this problem:
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        // Step 1 — Perplexity web search
+        send(controller, { progress: 5, step: 1, message: "Connecting to Perplexity Sonar Pro..." });
 
+        const searchResult = await openrouter.chat.completions.create({
+          model: "perplexity/sonar-pro",
+          messages: [{
+            role: "user",
+            content: `Research the best enterprise solution for this problem:
 Problem: "${problem}"
 Context: ${userContext}
 
@@ -40,28 +56,61 @@ Search for:
 - Implementation approaches used by similar companies
 - Limitations and tradeoffs of top options
 
-Be specific about tool names, pricing tiers, and integration capabilities.`;
+Be specific about tool names, pricing tiers, and integration capabilities.`,
+          }],
+          temperature: 0.3,
+        });
 
-  const searchResult = await openrouter.chat.completions.create({
-    model: "perplexity/sonar-pro",
-    messages: [{ role: "user", content: searchPrompt }],
-    temperature: 0.3,
-  });
+        const searchContent = searchResult.choices[0].message.content || "";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const citations: string[] = (searchResult as any).citations ?? [];
 
-  const searchContent = searchResult.choices[0].message.content || "";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const citations: string[] = (searchResult as any).citations ?? [];
+        send(controller, {
+          progress: 30,
+          step: 1,
+          message: `Perplexity found ${citations.length} sources`,
+          citations,
+          done: false,
+        });
 
-  // Step 2 — Jina reads top 3 sources in full
-  const topUrls = citations.slice(0, 3);
-  const jinaResults = await Promise.all(topUrls.map(jinaFetch));
-  const sourceContent = topUrls
-    .map((url, i) => jinaResults[i] ? `SOURCE: ${url}\n${jinaResults[i]}` : "")
-    .filter(Boolean)
-    .join("\n\n---\n\n");
+        // Step 2 — Jina reads each source
+        const topUrls = citations.slice(0, 3);
+        const jinaContents: string[] = [];
 
-  // Step 3 — DeepSeek R1 reasons over everything
-  const reasoningPrompt = `You are an enterprise solution architect. Reason carefully and build a specific, actionable solution.
+        for (let i = 0; i < topUrls.length; i++) {
+          send(controller, {
+            progress: 35 + i * 10,
+            step: 2,
+            message: `Reading source ${i + 1} of ${topUrls.length}: ${new URL(topUrls[i]).hostname}`,
+          });
+          const content = await jinaFetch(topUrls[i]);
+          jinaContents.push(content);
+        }
+
+        const sourceContent = topUrls
+          .map((url, i) => jinaContents[i] ? `SOURCE: ${url}\n${jinaContents[i]}` : "")
+          .filter(Boolean)
+          .join("\n\n---\n\n");
+
+        send(controller, {
+          progress: 60,
+          step: 2,
+          message: `Read ${jinaContents.filter(Boolean).length} sources in full`,
+        });
+
+        // Step 3 — DeepSeek R1 reasoning (streaming)
+        send(controller, {
+          progress: 65,
+          step: 3,
+          message: "DeepSeek R1 starting to reason...",
+        });
+
+        const reasoningStream = await openrouter.chat.completions.create({
+          model: "deepseek/deepseek-r1",
+          stream: true,
+          messages: [{
+            role: "user",
+            content: `You are an enterprise solution architect. Reason carefully and build a specific, actionable solution.
 
 USER CONTEXT:
 - Problem: "${problem}"
@@ -109,34 +158,87 @@ Return ONLY valid JSON:
   "timeToImplement": "Realistic estimate for ${size}"
 }
 
-CRITICAL for nodes: labels must be SHORT action phrases (3-5 words max). No descriptions. Good examples: "Trigger new hire event", "Send document request", "Check docs complete". Bad: long sentences.
-Include 6-9 nodes that tell a clear story left to right.`;
+CRITICAL for nodes: labels must be SHORT action phrases (3-5 words max). No descriptions. Include 6-9 nodes.`,
+          }],
+          temperature: 0.5,
+        });
 
-  const reasoningResult = await openrouter.chat.completions.create({
-    model: "deepseek/deepseek-r1",
-    messages: [{ role: "user", content: reasoningPrompt }],
-    temperature: 0.5,
+        // Stream DeepSeek tokens, update progress 65→90
+        let fullContent = "";
+        let tokenCount = 0;
+
+        for await (const chunk of reasoningStream) {
+          const delta = chunk.choices[0]?.delta?.content || "";
+          fullContent += delta;
+          tokenCount++;
+
+          // Send progress every 20 tokens
+          if (tokenCount % 20 === 0) {
+            const progress = Math.min(90, 65 + Math.floor((tokenCount / 300) * 25));
+            send(controller, {
+              progress,
+              step: 3,
+              message: `DeepSeek R1 reasoning... (${tokenCount} tokens)`,
+            });
+          }
+        }
+
+        send(controller, { progress: 92, step: 3, message: "Parsing solution..." });
+
+        // DeepSeek R1 wraps output in <think>...</think> before JSON — strip it
+        const stripped = fullContent.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+
+        // Find the outermost complete JSON object
+        let solution;
+        try {
+          const start = stripped.indexOf("{");
+          const end = stripped.lastIndexOf("}");
+          if (start === -1 || end === -1 || end <= start) throw new Error("No JSON found");
+          solution = JSON.parse(stripped.slice(start, end + 1));
+        } catch {
+          // Log raw content for debugging
+          console.error("JSON parse failed. Raw content length:", fullContent.length);
+          console.error("Stripped preview:", stripped.slice(0, 500));
+          send(controller, {
+            progress: 100,
+            done: true,
+            error: "AI returned an incomplete response. Please try again.",
+          });
+          controller.close();
+          return;
+        }
+
+        // Send final solution
+        send(controller, {
+          progress: 100,
+          step: 4,
+          message: "Solution ready",
+          done: true,
+          solution,
+          problem,
+          context: { size, stack, budget, timeline },
+          citations,
+          model: "perplexity/sonar-pro → jina reader → deepseek/r1",
+          tokens: (searchResult.usage?.total_tokens ?? 0) + tokenCount,
+        });
+
+        controller.close();
+      } catch (err) {
+        send(controller, {
+          progress: 100,
+          done: true,
+          error: err instanceof Error ? err.message : "Unknown error",
+        });
+        controller.close();
+      }
+    },
   });
 
-  const reasoningContent = reasoningResult.choices[0].message.content || "";
-
-  let solution;
-  try {
-    const jsonMatch = reasoningContent.match(/\{[\s\S]*\}/);
-    solution = JSON.parse(jsonMatch ? jsonMatch[0] : reasoningContent);
-  } catch {
-    return NextResponse.json(
-      { error: "Failed to parse solution", raw: reasoningContent },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json({
-    solution,
-    problem,
-    context: { size, stack, budget, timeline },
-    citations,
-    model: "perplexity/sonar-pro → jina reader → deepseek/r1",
-    tokens: (searchResult.usage?.total_tokens ?? 0) + (reasoningResult.usage?.total_tokens ?? 0),
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
   });
 }
