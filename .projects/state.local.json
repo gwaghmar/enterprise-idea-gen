@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "project": {
+    "initializedAt": "2026-06-30T19:58:53.766Z",
+    "merchantDisplayName": "AILLC",
+    "merchantId": "acct_1ThMyiHJarbkIU53",
+    "projectId": "project_61UxVlNONIvCZIAW316Uqkw4FfSQVW7DSRRffC17gDh2",
+    "projectName": "enterprise-idea-gen"
+  },
+  "providers": {
+    "openrouter": {
+      "accountRequestId": "facctrq_61UxVmJKc1zlbyRaR16Uqkw4FfSQVW7DSRRffC17gMeW",
+      "configuration": {},
+      "linkedAt": "2026-06-30T19:59:53.334Z",
+      "providerId": "prvdr_61URImmFACEuDHEx651IO",
+      "providerName": "OpenRouter",
+      "redirectUrl": null,
+      "requestedAt": "2026-06-30T19:59:53.334Z",
+      "status": "complete"
+    }
+  },
+  "resources": {
+    "openrouter-api": {
+      "configuration": {},
+      "createdAt": "2026-06-30T19:59:58.170Z",
+      "lastRevealedAt": "2026-06-30T19:59:58.502Z",
+      "lastStatus": "complete",
+      "name": "openrouter-api",
+      "providerId": "prvdr_61URImmFACEuDHEx651IO",
+      "providerName": "OpenRouter",
+      "resourceId": "fres_61UxVmMfoy5IlsEwn16Uqkw4FfSQVW7DSRRffC17gB4y",
+      "serviceId": "api"
+    }
+  }
+}
