@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
@@ -28,14 +28,14 @@ interface FlowEdge {
 interface Phase {
   title: string;
   actions: string[];
+  nodes?: FlowNode[];
+  edges?: FlowEdge[];
 }
 
 interface Solution {
   title: string;
   summary: string;
   tools: Tool[];
-  nodes: FlowNode[];
-  edges: FlowEdge[];
   phases: Phase[];
   estimatedCost: string;
   timeToImplement: string;
@@ -48,6 +48,11 @@ interface Context {
   timeline: string;
 }
 
+interface SelectedItem {
+  label: string;
+  itemType: string;
+}
+
 const categoryColors: Record<string, string> = {
   Integration: "bg-blue-500/20 text-blue-300 border-blue-500/30",
   Automation: "bg-purple-500/20 text-purple-300 border-purple-500/30",
@@ -56,6 +61,150 @@ const categoryColors: Record<string, string> = {
   Storage: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
   default: "bg-white/10 text-white/60 border-white/20",
 };
+
+function ExplainPopup({
+  item,
+  solutionContext,
+  onClose,
+}: {
+  item: SelectedItem;
+  solutionContext: string;
+  onClose: () => void;
+}) {
+  const [mode, setMode] = useState<"choose" | "explaining" | "asking">("choose");
+  const [question, setQuestion] = useState("");
+  const [response, setResponse] = useState("");
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const streamExplain = useCallback(async (q?: string) => {
+    setLoading(true);
+    setResponse("");
+
+    try {
+      const res = await fetch("/api/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item: item.label,
+          itemType: item.itemType,
+          question: q,
+          solutionContext,
+        }),
+      });
+
+      if (!res.body) return;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.text) setResponse((p) => p + data.text);
+          } catch { /* skip */ }
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [item, solutionContext]);
+
+  useEffect(() => {
+    if (mode === "asking" && inputRef.current) inputRef.current.focus();
+  }, [mode]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative bg-[#111] border border-white/15 rounded-2xl p-6 max-w-lg w-full shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <p className="text-white/40 text-xs uppercase tracking-wider mb-1">{item.itemType}</p>
+            <p className="text-white font-semibold text-base">{item.label}</p>
+          </div>
+          <button onClick={onClose} className="text-white/30 hover:text-white/70 ml-4 text-xl leading-none">×</button>
+        </div>
+
+        {/* Mode: choose */}
+        {mode === "choose" && (
+          <div className="flex flex-col gap-3 mt-2">
+            <button
+              onClick={() => { setMode("explaining"); streamExplain(); }}
+              className="w-full bg-white text-black font-semibold rounded-xl py-3 text-sm hover:bg-white/90 transition-all"
+            >
+              Explain this to me
+            </button>
+            <button
+              onClick={() => setMode("asking")}
+              className="w-full bg-white/8 border border-white/15 text-white font-medium rounded-xl py-3 text-sm hover:bg-white/12 transition-all"
+            >
+              I have a question
+            </button>
+          </div>
+        )}
+
+        {/* Mode: ask question */}
+        {mode === "asking" && !response && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); if (question.trim()) { streamExplain(question.trim()); } }}
+            className="mt-2 space-y-3"
+          >
+            <input
+              ref={inputRef}
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="What do you want to know?"
+              className="w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder:text-white/30 text-sm focus:outline-none focus:border-white/40"
+            />
+            <button
+              type="submit"
+              disabled={!question.trim()}
+              className="w-full bg-white text-black font-semibold rounded-xl py-3 text-sm hover:bg-white/90 disabled:opacity-40 transition-all"
+            >
+              Ask
+            </button>
+          </form>
+        )}
+
+        {/* AI Response */}
+        {(mode === "explaining" || (mode === "asking" && response)) && (
+          <div className="mt-3">
+            {loading && !response && (
+              <div className="flex gap-1 py-2">
+                {[0, 1, 2].map((i) => (
+                  <span key={i} className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                ))}
+              </div>
+            )}
+            {response && (
+              <p className="text-white/80 text-sm leading-relaxed">{response}</p>
+            )}
+            {!loading && response && (
+              <button
+                onClick={() => { setMode("asking"); setResponse(""); setQuestion(""); }}
+                className="mt-4 text-xs text-white/40 hover:text-white/70 transition-colors"
+              >
+                Ask a follow-up
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function SolutionPage() {
   const [solution, setSolution] = useState<Solution | null>(null);
@@ -66,6 +215,7 @@ export default function SolutionPage() {
   const [tokens, setTokens] = useState<number | null>(null);
   const [paying, setPaying] = useState(false);
   const [showSources, setShowSources] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -80,6 +230,14 @@ export default function SolutionPage() {
     setTokens(data.tokens ?? null);
   }, [router]);
 
+  const solutionContext = solution
+    ? `Title: ${solution.title}\nSummary: ${solution.summary}\nTools: ${solution.tools.map((t) => t.name).join(", ")}\nCost: ${solution.estimatedCost}\nTimeline: ${solution.timeToImplement}`
+    : "";
+
+  function pick(label: string, itemType: string) {
+    setSelectedItem({ label, itemType });
+  }
+
   async function handleApprove() {
     setPaying(true);
     try {
@@ -89,9 +247,7 @@ export default function SolutionPage() {
         body: JSON.stringify({ problem }),
       });
       const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      if (data.url) window.location.href = data.url;
     } catch {
       setPaying(false);
     }
@@ -107,12 +263,18 @@ export default function SolutionPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      {selectedItem && (
+        <ExplainPopup
+          item={selectedItem}
+          solutionContext={solutionContext}
+          onClose={() => setSelectedItem(null)}
+        />
+      )}
+
       <div className="max-w-5xl mx-auto px-6 py-12">
 
-        {/* Back */}
         <a href="/" className="text-white/40 text-sm hover:text-white/70 transition-colors">← New solution</a>
 
-        {/* Context badges */}
         {context && (
           <div className="flex flex-wrap gap-2 mt-6 mb-8">
             {[context.size, context.stack, context.budget, context.timeline].map((v, i) => (
@@ -121,13 +283,11 @@ export default function SolutionPage() {
           </div>
         )}
 
-        {/* Problem */}
         <div className="mb-8">
           <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Your problem</p>
           <p className="text-white/70 italic border-l-2 border-white/20 pl-4">{problem}</p>
         </div>
 
-        {/* Title + summary */}
         <h1 className="text-4xl font-bold mb-3">{solution.title}</h1>
         <p className="text-white/60 text-lg mb-10 max-w-3xl">{solution.summary}</p>
 
@@ -150,7 +310,11 @@ export default function SolutionPage() {
             {solution.tools.map((tool, i) => {
               const colorClass = categoryColors[tool.category] || categoryColors.default;
               return (
-                <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2">
+                <button
+                  key={i}
+                  onClick={() => pick(tool.name, "Tool")}
+                  className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2 text-left hover:border-white/25 hover:bg-white/8 transition-all cursor-pointer group"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-semibold text-white">{tool.name}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${colorClass}`}>
@@ -164,39 +328,55 @@ export default function SolutionPage() {
                       <p className="text-white/70 text-sm">{tool.whyForYou}</p>
                     </div>
                   )}
-                </div>
+                  <p className="text-xs text-white/25 group-hover:text-white/50 transition-colors pt-1">Click to learn more →</p>
+                </button>
               );
             })}
           </div>
         </div>
 
-        {/* Workflow */}
-        <div className="mb-12">
-          <h2 className="text-xl font-semibold mb-4">Workflow</h2>
-          <div className="border border-white/10 rounded-2xl overflow-hidden" style={{ height: 480 }}>
-            <FlowChart nodes={solution.nodes} edges={solution.edges} />
-          </div>
-        </div>
-
-        {/* Implementation roadmap */}
+        {/* Implementation phases with per-phase flowcharts */}
         {solution.phases && solution.phases.length > 0 && (
           <div className="mb-12">
-            <h2 className="text-xl font-semibold mb-4">How to implement</h2>
-            <div className="space-y-3">
+            <h2 className="text-xl font-semibold mb-6">How to implement</h2>
+            <div className="space-y-8">
               {solution.phases.map((phase, i) => (
-                <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="w-6 h-6 rounded-full bg-white/15 text-white text-xs flex items-center justify-center font-semibold shrink-0">{i + 1}</span>
+                <div key={i} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                  {/* Phase header */}
+                  <div className="flex items-center gap-3 px-5 py-4 border-b border-white/8">
+                    <span className="w-7 h-7 rounded-full bg-white/15 text-white text-xs flex items-center justify-center font-semibold shrink-0">{i + 1}</span>
                     <h3 className="font-semibold text-white">{phase.title}</h3>
                   </div>
-                  <ul className="space-y-1.5 pl-9">
-                    {phase.actions.map((action, j) => (
-                      <li key={j} className="text-white/60 text-sm flex items-start gap-2">
-                        <span className="text-white/30 mt-0.5">—</span>
-                        {action}
-                      </li>
-                    ))}
-                  </ul>
+
+                  <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Actions */}
+                    <div>
+                      <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Actions</p>
+                      <ul className="space-y-2">
+                        {phase.actions.map((action, j) => (
+                          <li key={j}>
+                            <button
+                              onClick={() => pick(action, `Phase ${i + 1} action`)}
+                              className="w-full text-left flex items-start gap-2 text-white/60 text-sm hover:text-white/90 transition-colors group"
+                            >
+                              <span className="text-white/25 mt-0.5 group-hover:text-white/50 transition-colors">—</span>
+                              <span>{action}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Per-phase flowchart */}
+                    {phase.nodes && phase.nodes.length > 0 && (
+                      <div>
+                        <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Workflow</p>
+                        <div className="border border-white/10 rounded-xl overflow-hidden" style={{ height: 220 }}>
+                          <FlowChart nodes={phase.nodes} edges={phase.edges ?? []} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

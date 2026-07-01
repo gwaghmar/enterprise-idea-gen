@@ -165,22 +165,41 @@ Return ONLY valid JSON:
       "whyForYou": "Why this specifically for ${size} on ${stack} within ${budget}"
     }
   ],
-  "nodes": [
-    { "id": "1", "label": "3-5 word action", "type": "start|process|decision|end" }
-  ],
-  "edges": [
-    { "from": "1", "to": "2", "label": "optional short label" }
-  ],
   "phases": [
-    { "title": "Phase 1 — Week 1-2", "actions": ["Specific action", "Specific action"] },
-    { "title": "Phase 2 — Week 3-4", "actions": ["Specific action"] },
-    { "title": "Phase 3 — Month 2+", "actions": ["Specific action"] }
+    {
+      "title": "Phase 1 — Week 1-2",
+      "actions": ["Specific action", "Specific action"],
+      "nodes": [
+        { "id": "p1_1", "label": "3-5 word action", "type": "start|process|decision|end" }
+      ],
+      "edges": [
+        { "from": "p1_1", "to": "p1_2", "label": "optional" }
+      ]
+    },
+    {
+      "title": "Phase 2 — Week 3-4",
+      "actions": ["Specific action"],
+      "nodes": [
+        { "id": "p2_1", "label": "3-5 word action", "type": "start|process|decision|end" }
+      ],
+      "edges": [
+        { "from": "p2_1", "to": "p2_2" }
+      ]
+    },
+    {
+      "title": "Phase 3 — Month 2+",
+      "actions": ["Specific action"],
+      "nodes": [
+        { "id": "p3_1", "label": "3-5 word action", "type": "start|process|decision|end" }
+      ],
+      "edges": []
+    }
   ],
   "estimatedCost": "Specific monthly cost breakdown",
   "timeToImplement": "Realistic estimate for ${size}"
 }
 
-CRITICAL for nodes: labels must be SHORT action phrases (3-5 words max). No descriptions. Include 6-9 nodes.`,
+CRITICAL for nodes: labels must be SHORT action phrases (3-5 words max). No descriptions. Each phase should have 3-5 nodes showing the workflow for THAT phase only. Node IDs must be unique across all phases (prefix with phase number like p1_, p2_, p3_).`,
           }],
           temperature: 0.5,
         });
