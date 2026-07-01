@@ -13,11 +13,23 @@ interface Tool {
 interface FlowNode { id: string; label: string; type: string; }
 interface FlowEdge { from: string; to: string; label?: string; }
 interface Phase { title: string; actions: string[]; nodes?: FlowNode[]; edges?: FlowEdge[]; }
+interface Stakeholder { role: string; team: string; responsibility: string; whenToContact: string; }
+interface Ticket { system: string; type: string; title: string; assignTo: string; }
+interface Permission { name: string; owner: string; why: string; }
+interface ITControl { name: string; action: string; }
+interface Risk { risk: string; severity: string; mitigation: string; }
+interface RolloutPlaybook { stakeholders?: Stakeholder[]; tickets?: Ticket[]; }
+interface Approvals { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[]; }
+interface VendorOutreach { howToReach?: string; email?: string; demoChecklist?: string[]; }
 interface Solution {
   title: string; insight?: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
+  rolloutPlaybook?: RolloutPlaybook; approvals?: Approvals; vendorOutreach?: VendorOutreach;
 }
-interface Context { size: string; stack: string; budget: string; timeline: string; }
+interface Context {
+  size: string; stack: string; budget: string; timeline: string;
+  industry?: string; team?: string; seats?: string; techLevel?: string; compliance?: string;
+}
 interface SelectedItem { label: string; itemType: string; }
 
 const categoryColors: Record<string, string> = {
@@ -263,9 +275,11 @@ export default function SolutionPage() {
         {/* Context badges */}
         {context && (
           <div className="flex flex-wrap gap-2 mb-8">
-            {[context.size, context.stack, context.budget, context.timeline].map((v, i) => (
-              <span key={i} className="text-xs bg-white/8 border border-white/15 rounded-full px-3 py-1 text-white/50">{v}</span>
-            ))}
+            {[context.industry, context.size, context.team, context.seats ? `${context.seats} seats` : "", context.stack, context.budget, context.timeline, context.techLevel, context.compliance]
+              .filter((v) => v && v !== "Not specified" && v !== "Not provided")
+              .map((v, i) => (
+                <span key={i} className="text-xs bg-white/8 border border-white/15 rounded-full px-3 py-1 text-white/50">{v}</span>
+              ))}
           </div>
         )}
 
@@ -396,6 +410,150 @@ export default function SolutionPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Internal Rollout Playbook */}
+        {solution.rolloutPlaybook && (
+          (solution.rolloutPlaybook.stakeholders?.length || solution.rolloutPlaybook.tickets?.length) ? (
+            <div className="mb-12">
+              <h2 className="text-xl font-semibold mb-1">Internal Rollout Playbook</h2>
+              <p className="text-white/40 text-sm mb-4">Who to loop in and what to file to get this approved inside your company.</p>
+
+              {solution.rolloutPlaybook.stakeholders && solution.rolloutPlaybook.stakeholders.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Who to involve</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {solution.rolloutPlaybook.stakeholders.map((s, i) => (
+                      <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="font-semibold text-white text-sm">{s.role}</span>
+                          {s.team && <span className="text-xs px-2 py-0.5 rounded-full border border-white/20 text-white/50 shrink-0">{s.team}</span>}
+                        </div>
+                        <p className="text-white/60 text-sm">{s.responsibility}</p>
+                        {s.whenToContact && <p className="text-white/35 text-xs mt-2">⏱ {s.whenToContact}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {solution.rolloutPlaybook.tickets && solution.rolloutPlaybook.tickets.length > 0 && (
+                <div>
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Tickets to file</p>
+                  <div className="space-y-2">
+                    {solution.rolloutPlaybook.tickets.map((t, i) => (
+                      <div key={i} className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-xl p-4">
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0 mt-0.5">{t.system}</span>
+                        <div className="min-w-0">
+                          <p className="text-white text-sm font-medium">{t.title}</p>
+                          <p className="text-white/45 text-xs mt-0.5">{t.type}{t.assignTo ? ` · → ${t.assignTo}` : ""}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null
+        )}
+
+        {/* Approvals & Red Tape */}
+        {solution.approvals && (
+          (solution.approvals.permissions?.length || solution.approvals.itControls?.length || solution.approvals.riskAssessment?.length) ? (
+            <div className="mb-12">
+              <h2 className="text-xl font-semibold mb-1">Approvals & IT Red Tape</h2>
+              <p className="text-white/40 text-sm mb-4">Permissions, IT controls, and the risk review you&apos;ll need to clear.</p>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {solution.approvals.permissions && solution.approvals.permissions.length > 0 && (
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                    <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Permissions to secure</p>
+                    <ul className="space-y-3">
+                      {solution.approvals.permissions.map((p, i) => (
+                        <li key={i} className="text-sm">
+                          <p className="text-white font-medium">{p.name}</p>
+                          <p className="text-white/50 text-xs mt-0.5">{p.why}{p.owner ? ` · Owner: ${p.owner}` : ""}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {solution.approvals.itControls && solution.approvals.itControls.length > 0 && (
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                    <p className="text-white/40 text-xs uppercase tracking-wider mb-3">IT controls (Netskope, IP allow-list, SSO…)</p>
+                    <ul className="space-y-3">
+                      {solution.approvals.itControls.map((c, i) => (
+                        <li key={i} className="text-sm">
+                          <p className="text-white font-medium">{c.name}</p>
+                          <p className="text-white/50 text-xs mt-0.5">{c.action}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {solution.approvals.riskAssessment && solution.approvals.riskAssessment.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Risk assessment</p>
+                  <div className="space-y-2">
+                    {solution.approvals.riskAssessment.map((r, i) => {
+                      const sev = (r.severity || "").toLowerCase();
+                      const sevClass = sev.includes("high") ? "bg-red-500/20 text-red-300 border-red-500/30"
+                        : sev.includes("med") ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/30"
+                        : "bg-green-500/20 text-green-300 border-green-500/30";
+                      return (
+                        <div key={i} className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-xl p-4">
+                          <span className={`text-xs px-2 py-0.5 rounded-full border shrink-0 mt-0.5 ${sevClass}`}>{r.severity || "—"}</span>
+                          <div>
+                            <p className="text-white text-sm">{r.risk}</p>
+                            <p className="text-white/50 text-xs mt-1"><span className="text-white/35">Mitigation:</span> {r.mitigation}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null
+        )}
+
+        {/* Vendor Outreach Kit */}
+        {solution.vendorOutreach && (solution.vendorOutreach.email || solution.vendorOutreach.demoChecklist?.length) && (
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Vendor Outreach Kit</h2>
+            <p className="text-white/40 text-sm mb-4">How to reach the vendor and what to pin down before you buy.</p>
+
+            {solution.vendorOutreach.howToReach && (
+              <p className="text-white/60 text-sm mb-4">{solution.vendorOutreach.howToReach}</p>
+            )}
+
+            {solution.vendorOutreach.email && (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-white/40 text-xs uppercase tracking-wider">Ready-to-send intro email</p>
+                  <button onClick={() => navigator.clipboard.writeText(solution.vendorOutreach!.email!)}
+                    className="text-xs text-white/40 hover:text-white/80 transition-colors">Copy</button>
+                </div>
+                <pre className="text-white/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">{solution.vendorOutreach.email}</pre>
+              </div>
+            )}
+
+            {solution.vendorOutreach.demoChecklist && solution.vendorOutreach.demoChecklist.length > 0 && (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                <p className="text-white/40 text-xs uppercase tracking-wider mb-3">Demo-call checklist</p>
+                <ul className="space-y-2">
+                  {solution.vendorOutreach.demoChecklist.map((q, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-white/60">
+                      <span className="text-white/25 shrink-0">☐</span><span>{q}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 

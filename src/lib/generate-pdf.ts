@@ -5,11 +5,22 @@ interface FlowNode { id: string; label: string; type: string; }
 interface FlowEdge { from: string; to: string; label?: string; }
 interface Tool { name: string; purpose: string; category: string; whyForYou: string; vendorQuestions?: string[]; }
 interface Phase { title: string; actions: string[]; nodes?: FlowNode[]; edges?: FlowEdge[]; }
+interface Stakeholder { role: string; team: string; responsibility: string; whenToContact: string; }
+interface Ticket { system: string; type: string; title: string; assignTo: string; }
+interface Permission { name: string; owner: string; why: string; }
+interface ITControl { name: string; action: string; }
+interface Risk { risk: string; severity: string; mitigation: string; }
 interface Solution {
   title: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
+  rolloutPlaybook?: { stakeholders?: Stakeholder[]; tickets?: Ticket[] };
+  approvals?: { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[] };
+  vendorOutreach?: { howToReach?: string; email?: string; demoChecklist?: string[] };
 }
-interface Context { size: string; stack: string; budget: string; timeline: string; }
+interface Context {
+  size: string; stack: string; budget: string; timeline: string;
+  industry?: string; team?: string; seats?: string; techLevel?: string; compliance?: string;
+}
 interface ROI { weeklyHours: number; teamSize: number; hourlyRate: number; }
 
 // Palette
@@ -469,6 +480,151 @@ export async function generatePDF(
 
     addPageNum(doc, page);
   });
+
+  // ══════════════════════════════════════════════
+  // PAGE — ROLLOUT PLAYBOOK, APPROVALS & VENDOR OUTREACH
+  // ══════════════════════════════════════════════
+  const rp = solution.rolloutPlaybook;
+  const ap = solution.approvals;
+  const vo = solution.vendorOutreach;
+  const hasRollout =
+    (rp && ((rp.stakeholders && rp.stakeholders.length) || (rp.tickets && rp.tickets.length))) ||
+    (ap && ((ap.permissions && ap.permissions.length) || (ap.itControls && ap.itControls.length) || (ap.riskAssessment && ap.riskAssessment.length))) ||
+    (vo && (vo.email || (vo.demoChecklist && vo.demoChecklist.length)));
+
+  if (hasRollout) {
+    doc.addPage();
+    page++;
+    doc.setFillColor(...C.bgLight);
+    doc.rect(0, 0, W, H, "F");
+    doc.setFillColor(...C.accent);
+    doc.rect(0, 0, W, 1.5, "F");
+
+    y = MT;
+    doc.setFontSize(8);
+    doc.setTextColor(...C.light);
+    doc.setFont("helvetica", "normal");
+    doc.text(solution.title.toUpperCase(), ML, y + 4);
+    y += 12;
+
+    function ensureRoom(needed: number) {
+      if (y > H - needed) {
+        addPageNum(doc, page);
+        doc.addPage(); page++;
+        doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F");
+        doc.setFillColor(...C.accent); doc.rect(0, 0, W, 1.5, "F");
+        y = MT + 6;
+      }
+    }
+
+    // Stakeholders
+    if (rp?.stakeholders && rp.stakeholders.length > 0) {
+      y = sectionLabel(doc, "Internal Rollout — Who To Involve", y);
+      rp.stakeholders.forEach((s) => {
+        ensureRoom(24);
+        doc.setFontSize(9);
+        doc.setTextColor(...C.dark);
+        doc.setFont("helvetica", "bold");
+        doc.text(`${s.role}${s.team ? `  (${s.team})` : ""}`, ML, y);
+        y += 5;
+        y = wrapText(doc, s.responsibility, ML + 2, y, CW - 4, 8, C.mid, "normal");
+        if (s.whenToContact) { y = wrapText(doc, `When: ${s.whenToContact}`, ML + 2, y, CW - 4, 7.5, C.light, "italic"); }
+        y += 3;
+      });
+      y += 4;
+    }
+
+    // Tickets
+    if (rp?.tickets && rp.tickets.length > 0) {
+      ensureRoom(30);
+      y = sectionLabel(doc, "Tickets To File", y);
+      rp.tickets.forEach((t) => {
+        ensureRoom(16);
+        doc.setFontSize(8.5);
+        doc.setTextColor(...C.accent);
+        doc.setFont("helvetica", "bold");
+        doc.text(`[${t.system}]`, ML, y);
+        doc.setTextColor(...C.dark);
+        y = wrapText(doc, t.title, ML + 2, y + 5, CW - 4, 8.5, C.dark, "normal");
+        if (t.type || t.assignTo) y = wrapText(doc, `${t.type}${t.assignTo ? ` → ${t.assignTo}` : ""}`, ML + 2, y, CW - 4, 7.5, C.light, "italic");
+        y += 3;
+      });
+      y += 4;
+    }
+
+    // Permissions & IT controls
+    if (ap?.permissions && ap.permissions.length > 0) {
+      ensureRoom(30);
+      y = sectionLabel(doc, "Permissions To Secure", y);
+      ap.permissions.forEach((p) => {
+        ensureRoom(14);
+        doc.setFontSize(8.5); doc.setTextColor(...C.dark); doc.setFont("helvetica", "bold");
+        doc.text(`• ${p.name}`, ML, y); y += 4.5;
+        y = wrapText(doc, `${p.why}${p.owner ? ` (Owner: ${p.owner})` : ""}`, ML + 4, y, CW - 8, 7.5, C.mid, "normal");
+        y += 2;
+      });
+      y += 4;
+    }
+    if (ap?.itControls && ap.itControls.length > 0) {
+      ensureRoom(30);
+      y = sectionLabel(doc, "IT Controls (CASB / IP Allow-list / SSO)", y);
+      ap.itControls.forEach((c) => {
+        ensureRoom(14);
+        doc.setFontSize(8.5); doc.setTextColor(...C.dark); doc.setFont("helvetica", "bold");
+        doc.text(`• ${c.name}`, ML, y); y += 4.5;
+        y = wrapText(doc, c.action, ML + 4, y, CW - 8, 7.5, C.mid, "normal");
+        y += 2;
+      });
+      y += 4;
+    }
+
+    // Risk assessment
+    if (ap?.riskAssessment && ap.riskAssessment.length > 0) {
+      ensureRoom(30);
+      y = sectionLabel(doc, "Risk Assessment", y);
+      ap.riskAssessment.forEach((r) => {
+        ensureRoom(16);
+        doc.setFontSize(8.5); doc.setTextColor(...C.dark); doc.setFont("helvetica", "bold");
+        doc.text(`[${r.severity || "—"}] `, ML, y);
+        const sevW = doc.getTextWidth(`[${r.severity || "—"}] `);
+        doc.setFont("helvetica", "normal");
+        y = wrapText(doc, r.risk, ML + sevW, y, CW - sevW - 2, 8.5, C.dark, "normal");
+        y = wrapText(doc, `Mitigation: ${r.mitigation}`, ML + 4, y, CW - 8, 7.5, C.mid, "italic");
+        y += 3;
+      });
+      y += 4;
+    }
+
+    // Vendor outreach
+    if (vo && (vo.email || (vo.demoChecklist && vo.demoChecklist.length))) {
+      ensureRoom(40);
+      y = sectionLabel(doc, "Vendor Outreach", y);
+      if (vo.howToReach) { y = wrapText(doc, vo.howToReach, ML, y, CW, 8.5, C.dark, "normal"); y += 3; }
+      if (vo.email) {
+        ensureRoom(30);
+        doc.setFillColor(...C.white); doc.setDrawColor(...C.rule); doc.setLineWidth(0.3);
+        const emailLines = doc.splitTextToSize(vo.email, CW - 8);
+        const boxH = emailLines.length * 4.2 + 8;
+        ensureRoom(boxH + 4);
+        doc.roundedRect(ML, y, CW, boxH, 2, 2, "FD");
+        doc.setFontSize(8); doc.setTextColor(...C.mid); doc.setFont("helvetica", "normal");
+        doc.text(emailLines, ML + 4, y + 6);
+        y += boxH + 4;
+      }
+      if (vo.demoChecklist && vo.demoChecklist.length > 0) {
+        ensureRoom(20);
+        doc.setFontSize(8); doc.setTextColor(...C.light); doc.setFont("helvetica", "normal");
+        doc.text("DEMO-CALL CHECKLIST", ML, y); y += 5;
+        vo.demoChecklist.forEach((q) => {
+          ensureRoom(10);
+          y = wrapText(doc, `☐  ${q}`, ML, y, CW, 8, C.dark, "normal");
+          y += 1.5;
+        });
+      }
+    }
+
+    addPageNum(doc, page);
+  }
 
   // ══════════════════════════════════════════════
   // FINAL PAGE — SOURCES & APPENDIX
