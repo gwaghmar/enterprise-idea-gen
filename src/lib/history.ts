@@ -20,16 +20,28 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   try { return JSON.parse(raw) as T; } catch { return fallback; }
 }
 
+// localStorage access itself can throw (private mode, storage disabled) —
+// every touch goes through these guards so callers never crash the page.
+function lsGet(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function lsSet(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* unavailable or quota */ }
+}
+function lsRemove(key: string) {
+  try { localStorage.removeItem(key); } catch { /* ignore */ }
+}
+
 export function newSid(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function listHistory(): HistoryRecord[] {
-  return safeParse<HistoryRecord[]>(localStorage.getItem(INDEX_KEY), []);
+  return safeParse<HistoryRecord[]>(lsGet(INDEX_KEY), []);
 }
 
 function writeIndex(records: HistoryRecord[]) {
-  try { localStorage.setItem(INDEX_KEY, JSON.stringify(records)); } catch { /* quota */ }
+  lsSet(INDEX_KEY, JSON.stringify(records));
 }
 
 export function saveToHistory(record: HistoryRecord, payload: unknown) {
@@ -37,13 +49,12 @@ export function saveToHistory(record: HistoryRecord, payload: unknown) {
   records.unshift(record);
   writeIndex(records);
 
-  try {
-    localStorage.setItem(PAYLOAD_PREFIX + record.sid, JSON.stringify(payload));
-  } catch { /* quota — index entry still useful if a shareId exists */ }
+  // Payload write may hit quota — index entry still useful if a shareId exists
+  lsSet(PAYLOAD_PREFIX + record.sid, JSON.stringify(payload));
 
   // Prune payload cache beyond the cap (index keeps all entries)
   records.slice(MAX_CACHED_PAYLOADS).forEach((r) => {
-    localStorage.removeItem(PAYLOAD_PREFIX + r.sid);
+    lsRemove(PAYLOAD_PREFIX + r.sid);
   });
 }
 
@@ -54,18 +65,18 @@ export function updateHistory(sid: string, patch: Partial<HistoryRecord>, payloa
     records[i] = { ...records[i], ...patch };
     writeIndex(records);
   }
-  if (payload !== undefined && localStorage.getItem(PAYLOAD_PREFIX + sid) !== null) {
-    try { localStorage.setItem(PAYLOAD_PREFIX + sid, JSON.stringify(payload)); } catch { /* quota */ }
+  if (payload !== undefined && lsGet(PAYLOAD_PREFIX + sid) !== null) {
+    lsSet(PAYLOAD_PREFIX + sid, JSON.stringify(payload));
   }
 }
 
 export function loadPayload(sid: string): Record<string, unknown> | null {
-  return safeParse<Record<string, unknown> | null>(localStorage.getItem(PAYLOAD_PREFIX + sid), null);
+  return safeParse<Record<string, unknown> | null>(lsGet(PAYLOAD_PREFIX + sid), null);
 }
 
 export function removeFromHistory(sid: string) {
   writeIndex(listHistory().filter((r) => r.sid !== sid));
-  localStorage.removeItem(PAYLOAD_PREFIX + sid);
+  lsRemove(PAYLOAD_PREFIX + sid);
 }
 
 export function markPaid(sid: string) {

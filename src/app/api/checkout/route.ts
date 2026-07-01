@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       },
     ],
     mode: "payment",
-    success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}${sid ? `&sid=${encodeURIComponent(sid)}` : ""}`,
+    success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/solution`,
     metadata: { problem: problem.slice(0, 500), sid },
   });
@@ -65,8 +65,15 @@ export async function GET(req: NextRequest) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
+    // Confirm this is one of OUR $1 unlock sessions, not any paid session
+    // that happens to exist on the Stripe account
+    const paid =
+      session.payment_status === "paid" &&
+      session.mode === "payment" &&
+      session.amount_total === 100 &&
+      session.currency === "usd";
     return NextResponse.json({
-      paid: session.payment_status === "paid",
+      paid,
       sid: session.metadata?.sid ?? "",
     });
   } catch {

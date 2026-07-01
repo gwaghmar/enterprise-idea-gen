@@ -11,7 +11,6 @@ function SuccessContent() {
 
   useEffect(() => {
     const sessionId = params.get("session_id");
-    const sidParam = params.get("sid");
 
     async function verify() {
       try {
@@ -19,7 +18,9 @@ function SuccessContent() {
         const res = await fetch(`/api/checkout?session_id=${encodeURIComponent(sessionId)}`);
         const data = await res.json();
         if (res.ok && data.paid) {
-          const sid = data.sid || sidParam;
+          // Only trust the sid from Stripe metadata — a URL param would let
+          // the client pick which solution to unlock
+          const sid = data.sid;
           if (sid) {
             markPaid(sid);
             // Unlock the in-session copy too so /solution reflects it immediately
