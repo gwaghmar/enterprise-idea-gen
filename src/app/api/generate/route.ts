@@ -162,7 +162,8 @@ Return ONLY valid JSON:
       "name": "Exact tool name",
       "purpose": "What it does in this solution",
       "category": "Category",
-      "whyForYou": "Why this specifically for ${size} on ${stack} within ${budget}"
+      "whyForYou": "Why this specifically for ${size} on ${stack} within ${budget}",
+      "vendorQuestions": ["Question to ask vendor before buying", "Question about integration", "Question about pricing/contract"]
     }
   ],
   "phases": [
