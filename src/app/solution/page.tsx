@@ -6,7 +6,9 @@ import dynamic from "next/dynamic";
 import {
   Search, Sparkles, FileText, Brain, CheckCircle2, Circle,
   Lightbulb, Target, Clock, ArrowRight, ArrowUpRight, ArrowLeft, AlertTriangle, Square, Wand2,
+  Lock, Mail, Copy, FileDown, History,
 } from "lucide-react";
+import { isPaid, updateHistory } from "@/lib/history";
 
 const ACTIVITY_ICONS: Record<string, typeof Search> = {
   search: Search, found: Sparkles, read: FileText, synth: Brain, done: CheckCircle2,
@@ -19,6 +21,40 @@ function ActivityIcon({ type, className }: { type: string; className?: string })
 // Favicon lookups need a bare hostname — activity text can be a phrase like "Reading workato.com"
 function faviconDomain(url: string): string {
   try { return new URL(url).hostname; } catch { return url; }
+}
+
+// Turn the AI-drafted "Subject: ...\n\n<body>" email into a mailto: link
+function mailtoFromEmail(email: string): string {
+  const match = email.match(/^Subject:\s*(.+)\r?\n+/i);
+  const subject = match ? match[1].trim() : "Vendor inquiry";
+  const body = match ? email.slice(match[0].length) : email;
+  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function downloadKpiCsv(kpis: Kpi[], title: string) {
+  const esc = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
+  const rows = [
+    ["Metric", "Baseline", "Target", "Timeframe"],
+    ...kpis.map((k) => [k.metric, k.baseline ?? "", k.target, k.timeframe ?? ""]),
+  ];
+  const csv = rows.map((r) => r.map(esc).join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${title.replace(/[^a-z0-9]/gi, "_").slice(0, 40)}_KPIs.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ticketText(t: Ticket, problem: string): string {
+  return [
+    `Title: ${t.title}`,
+    `Type: ${t.type}`,
+    `System: ${t.system}`,
+    t.assignTo ? `Assign to: ${t.assignTo}` : "",
+    "",
+    `Context: ${problem}`,
+  ].filter(Boolean).join("\n");
 }
 
 const FlowChart = dynamic(() => import("@/components/FlowChart"), { ssr: false });
@@ -297,6 +333,9 @@ export default function SolutionPage() {
   const [exporting, setExporting] = useState(false);
   const [roiData, setRoiData] = useState<{ weeklyHours: number; teamSize: number; hourlyRate: number } | null>(null);
   const [askBtn, setAskBtn] = useState<{ text: string; top: number; left: number } | null>(null);
+  const [sid, setSid] = useState<string | null>(null);
+  const [unlocked, setUnlocked] = useState(false);
+  const [copiedTicket, setCopiedTicket] = useState<number | null>(null);
   const router = useRouter();
   const rawDataRef = useRef<Record<string, unknown>>({});
   const contentRef = useRef<HTMLDivElement>(null);
@@ -333,6 +372,8 @@ export default function SolutionPage() {
     setContext(data.context ?? null);
     setCitations(data.citations ?? []);
     setActivity(data.activity ?? []);
+    setSid(data.sid ?? null);
+    setUnlocked(Boolean(data.paid) || isPaid(data.sid));
     setModel(data.model ?? "");
     setTokens(data.tokens ?? null);
   }, [router]);
@@ -347,6 +388,7 @@ export default function SolutionPage() {
     setSolution(updated);
     rawDataRef.current = { ...rawDataRef.current, solution: updated };
     try { sessionStorage.setItem("solution", JSON.stringify(rawDataRef.current)); } catch { /* ignore quota */ }
+    if (sid) updateHistory(sid, { title: updated.title }, rawDataRef.current);
     setShareUrl(null); // invalidate any prior share link — content changed
   }
 
@@ -371,6 +413,7 @@ export default function SolutionPage() {
 
   async function handleExport() {
     if (!solution || !context) return;
+    if (!unlocked) { handleApprove(); return; }
     setExporting(true);
     try {
       // Collect ROI from the DOM inputs if filled
@@ -389,7 +432,7 @@ export default function SolutionPage() {
     try {
       const res = await fetch("/api/checkout", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ problem }),
+        body: JSON.stringify({ problem, sid }),
       });
       const data = await res.json();
       if (data.url) window.location.href = data.url;
@@ -422,7 +465,10 @@ export default function SolutionPage() {
 
         {/* Top nav */}
         <div className="flex items-center justify-between mb-8">
-          <a href="/" className="text-white/40 text-sm hover:text-white/70 transition-colors flex items-center gap-1.5"><ArrowLeft className="w-4 h-4" /> New solution</a>
+          <div className="flex items-center gap-5">
+            <a href="/" className="text-white/40 text-sm hover:text-white/70 transition-colors flex items-center gap-1.5"><ArrowLeft className="w-4 h-4" /> New solution</a>
+            <a href="/history" className="text-white/40 text-sm hover:text-white/70 transition-colors flex items-center gap-1.5"><History className="w-4 h-4" /> My solutions</a>
+          </div>
           <div className="flex gap-2">
             <button onClick={handleShare} disabled={sharing}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm border border-white/15 text-white/60 hover:text-white hover:border-white/30 disabled:opacity-50 transition-all">
@@ -430,6 +476,7 @@ export default function SolutionPage() {
             </button>
             <button onClick={handleExport} disabled={exporting}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm bg-white text-black font-semibold hover:bg-white/90 disabled:opacity-50 transition-all">
+              {!unlocked && <Lock className="w-3.5 h-3.5" />}
               {exporting ? "Exporting..." : "Export PDF"}
             </button>
           </div>
@@ -486,8 +533,39 @@ export default function SolutionPage() {
           <ROICalculator estimatedCost={solution.estimatedCost} />
         </div>
 
+        {/* Unlock banner — the implementation kit sits behind the $1 */}
+        {!unlocked && (
+          <div className="mb-12 border border-white/20 bg-gradient-to-br from-white/8 to-white/3 rounded-2xl p-6">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
+                <Lock className="w-4.5 h-4.5 text-white/70" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold mb-1">Unlock the full implementation kit — $1</h2>
+                <p className="text-white/50 text-sm mb-4">The preview above is free. Paying once unlocks the parts you&apos;ll actually execute with:</p>
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm text-white/65 mb-5">
+                  {[
+                    "Total Cost of Ownership breakdown",
+                    "Internal rollout playbook + tickets to file",
+                    "Approvals, IT controls & risk assessment",
+                    "Vendor outreach kit with ready-to-send email",
+                    "PDF export of the complete report",
+                  ].map((f) => (
+                    <li key={f} className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400/80 shrink-0" />{f}</li>
+                  ))}
+                </ul>
+                <button onClick={handleApprove} disabled={paying}
+                  className="bg-white text-black font-semibold rounded-xl px-6 py-2.5 text-sm hover:bg-white/90 disabled:opacity-50 transition-all">
+                  {paying ? "Redirecting…" : "Unlock for $1"}
+                </button>
+                <span className="text-white/30 text-xs ml-3">One-time. No subscription.</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Total Cost of Ownership */}
-        {solution.tco && (solution.tco.lineItems?.length || solution.tco.firstYearTotal) && (
+        {unlocked && solution.tco && (solution.tco.lineItems?.length || solution.tco.firstYearTotal) && (
           <div className="mb-12">
             <h2 className="text-xl font-semibold mb-1">Total Cost of Ownership</h2>
             <p className="text-white/40 text-sm mb-4">The real number — setup, recurring, and the costs most teams forget.</p>
@@ -661,7 +739,13 @@ export default function SolutionPage() {
         {/* Success Metrics / KPIs */}
         {solution.kpis && solution.kpis.length > 0 && (
           <div className="mb-12">
-            <h2 className="text-xl font-semibold mb-1">Success Metrics</h2>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-xl font-semibold">Success Metrics</h2>
+              <button onClick={() => downloadKpiCsv(solution.kpis!, solution.title)}
+                className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/80 transition-colors">
+                <FileDown className="w-3.5 h-3.5" /> Download CSV
+              </button>
+            </div>
             <p className="text-white/40 text-sm mb-4">How you&apos;ll know it worked — measurable, with a baseline and a deadline.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {solution.kpis.map((k, i) => (
@@ -699,7 +783,7 @@ export default function SolutionPage() {
         )}
 
         {/* Internal Rollout Playbook */}
-        {solution.rolloutPlaybook && (
+        {unlocked && solution.rolloutPlaybook && (
           (solution.rolloutPlaybook.stakeholders?.length || solution.rolloutPlaybook.tickets?.length) ? (
             <div className="mb-12">
               <h2 className="text-xl font-semibold mb-1">Internal Rollout Playbook</h2>
@@ -730,10 +814,16 @@ export default function SolutionPage() {
                     {solution.rolloutPlaybook.tickets.map((t, i) => (
                       <div key={i} className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-xl p-4">
                         <span className="text-xs px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0 mt-0.5">{t.system}</span>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="text-white text-sm font-medium">{t.title}</p>
                           <p className="text-white/45 text-xs mt-0.5 flex items-center gap-1">{t.type}{t.assignTo && <><span className="text-white/25">·</span><ArrowRight className="w-3 h-3" />{t.assignTo}</>}</p>
                         </div>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(ticketText(t, problem)); setCopiedTicket(i); setTimeout(() => setCopiedTicket(null), 1500); }}
+                          title="Copy ticket — paste into Jira/ServiceNow"
+                          className="flex items-center gap-1.5 text-xs text-white/35 hover:text-white/80 transition-colors shrink-0 mt-0.5">
+                          {copiedTicket === i ? <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy ticket</>}
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -744,7 +834,7 @@ export default function SolutionPage() {
         )}
 
         {/* Approvals & Red Tape */}
-        {solution.approvals && (
+        {unlocked && solution.approvals && (
           (solution.approvals.permissions?.length || solution.approvals.itControls?.length || solution.approvals.riskAssessment?.length) ? (
             <div className="mb-12">
               <h2 className="text-xl font-semibold mb-1">Approvals & IT Red Tape</h2>
@@ -807,7 +897,7 @@ export default function SolutionPage() {
         )}
 
         {/* Vendor Outreach Kit */}
-        {solution.vendorOutreach && (solution.vendorOutreach.howToReach || solution.vendorOutreach.email || solution.vendorOutreach.demoChecklist?.length) && (
+        {unlocked && solution.vendorOutreach && (solution.vendorOutreach.howToReach || solution.vendorOutreach.email || solution.vendorOutreach.demoChecklist?.length) && (
           <div className="mb-12">
             <h2 className="text-xl font-semibold mb-1">Vendor Outreach Kit</h2>
             <p className="text-white/40 text-sm mb-4">How to reach the vendor and what to pin down before you buy.</p>
@@ -820,8 +910,16 @@ export default function SolutionPage() {
               <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-white/40 text-xs uppercase tracking-wider">Ready-to-send intro email</p>
-                  <button onClick={() => navigator.clipboard.writeText(solution.vendorOutreach!.email!)}
-                    className="text-xs text-white/40 hover:text-white/80 transition-colors">Copy</button>
+                  <div className="flex items-center gap-4">
+                    <a href={mailtoFromEmail(solution.vendorOutreach.email)}
+                      className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/80 transition-colors">
+                      <Mail className="w-3.5 h-3.5" /> Open in email app
+                    </a>
+                    <button onClick={() => navigator.clipboard.writeText(solution.vendorOutreach!.email!)}
+                      className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/80 transition-colors">
+                      <Copy className="w-3.5 h-3.5" /> Copy
+                    </button>
+                  </div>
                 </div>
                 <pre className="text-white/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">{solution.vendorOutreach.email}</pre>
               </div>
@@ -891,20 +989,40 @@ export default function SolutionPage() {
           )}
         </div>
 
-        {/* Approve */}
+        {/* Approve / owned */}
         <div className="border border-white/10 rounded-2xl p-8 text-center">
-          <h2 className="text-2xl font-bold mb-2">Happy with this solution?</h2>
-          <p className="text-white/50 mb-6">Pay $1 to save and own this workflow. No subscription.</p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button onClick={handleApprove} disabled={paying}
-              className="bg-white text-black font-semibold rounded-xl px-8 py-3 hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
-              {paying ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />Redirecting...</span> : "Approve & Pay $1"}
-            </button>
-            <button onClick={() => { if (confirm("This will clear your current solution. Start a new one?")) { sessionStorage.removeItem("solution"); router.push("/"); } }}
-              className="border border-white/20 text-white/60 font-medium rounded-xl px-8 py-3 hover:border-white/40 hover:text-white/80 transition-all">
-              Try a different problem
-            </button>
-          </div>
+          {unlocked ? (
+            <>
+              <h2 className="text-2xl font-bold mb-2 flex items-center justify-center gap-2"><CheckCircle2 className="w-6 h-6 text-emerald-400" /> You own this solution</h2>
+              <p className="text-white/50 mb-6">The full report is unlocked — export it, share it, or find it later in My Solutions.</p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button onClick={handleExport} disabled={exporting}
+                  className="bg-white text-black font-semibold rounded-xl px-8 py-3 hover:bg-white/90 disabled:opacity-50 transition-all">
+                  {exporting ? "Exporting..." : "Export PDF"}
+                </button>
+                <button onClick={() => router.push("/")}
+                  className="border border-white/20 text-white/60 font-medium rounded-xl px-8 py-3 hover:border-white/40 hover:text-white/80 transition-all">
+                  Generate another solution
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="text-2xl font-bold mb-2">Happy with this solution?</h2>
+              <p className="text-white/50 mb-6">Pay $1 to unlock the full implementation kit and PDF export. No subscription.</p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button onClick={handleApprove} disabled={paying}
+                  className="bg-white text-black font-semibold rounded-xl px-8 py-3 hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                  {paying ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />Redirecting...</span> : "Unlock for $1"}
+                </button>
+                <button onClick={() => router.push("/")}
+                  className="border border-white/20 text-white/60 font-medium rounded-xl px-8 py-3 hover:border-white/40 hover:text-white/80 transition-all">
+                  Try a different problem
+                </button>
+              </div>
+              <p className="text-white/30 text-xs mt-4">Your preview is auto-saved to My Solutions either way.</p>
+            </>
+          )}
         </div>
 
       </div>
