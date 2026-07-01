@@ -20,14 +20,30 @@ async function jinaFetch(url: string): Promise<string> {
   }
 }
 
+function log(reqId: string, step: string, data: Record<string, unknown>) {
+  console.log(JSON.stringify({ reqId, step, ts: new Date().toISOString(), ...data }));
+}
+
 export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
-  const { problem, size, stack, budget, timeline } = await req.json();
+  const reqId = Math.random().toString(36).slice(2, 9);
+
+  let body: { problem?: string; size?: string; stack?: string; budget?: string; timeline?: string };
+  try {
+    body = await req.json();
+  } catch {
+    console.error(JSON.stringify({ reqId, step: "parse_body", error: "Invalid or empty JSON body" }));
+    return new Response(JSON.stringify({ error: "Invalid request body" }), { status: 400 });
+  }
+
+  const { problem, size, stack, budget, timeline } = body;
 
   if (!problem) {
     return new Response(JSON.stringify({ error: "Problem is required" }), { status: 400 });
   }
+
+  log(reqId, "start", { problem: problem.slice(0, 80), size, stack, budget, timeline });
 
   const openrouter = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
@@ -41,6 +57,7 @@ export async function POST(req: NextRequest) {
       try {
         // Step 1 — Perplexity web search
         send(controller, { progress: 5, step: 1, message: "Connecting to Perplexity Sonar Pro..." });
+        const t1 = Date.now();
 
         const searchResult = await openrouter.chat.completions.create({
           model: "perplexity/sonar-pro",
@@ -64,6 +81,7 @@ Be specific about tool names, pricing tiers, and integration capabilities.`,
         const searchContent = searchResult.choices[0].message.content || "";
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const citations: string[] = (searchResult as any).citations ?? [];
+        log(reqId, "perplexity_done", { ms: Date.now() - t1, citations: citations.length, tokens: searchResult.usage?.total_tokens });
 
         send(controller, {
           progress: 30,
@@ -76,6 +94,7 @@ Be specific about tool names, pricing tiers, and integration capabilities.`,
         // Step 2 — Jina reads each source
         const topUrls = citations.slice(0, 3);
         const jinaContents: string[] = [];
+        const t2 = Date.now();
 
         for (let i = 0; i < topUrls.length; i++) {
           send(controller, {
@@ -85,6 +104,7 @@ Be specific about tool names, pricing tiers, and integration capabilities.`,
           });
           const content = await jinaFetch(topUrls[i]);
           jinaContents.push(content);
+          log(reqId, `jina_source_${i + 1}`, { url: topUrls[i], chars: content.length });
         }
 
         const sourceContent = topUrls
@@ -92,6 +112,7 @@ Be specific about tool names, pricing tiers, and integration capabilities.`,
           .filter(Boolean)
           .join("\n\n---\n\n");
 
+        log(reqId, "jina_done", { ms: Date.now() - t2, sourcesRead: jinaContents.filter(Boolean).length });
         send(controller, {
           progress: 60,
           step: 2,
@@ -104,6 +125,7 @@ Be specific about tool names, pricing tiers, and integration capabilities.`,
           step: 3,
           message: "DeepSeek R1 starting to reason...",
         });
+        const t3 = Date.now();
 
         const reasoningStream = await openrouter.chat.completions.create({
           model: "deepseek/deepseek-r1",
@@ -183,6 +205,7 @@ CRITICAL for nodes: labels must be SHORT action phrases (3-5 words max). No desc
           }
         }
 
+        log(reqId, "deepseek_done", { ms: Date.now() - t3, tokens: tokenCount, contentLen: fullContent.length });
         send(controller, { progress: 92, step: 3, message: "Parsing solution..." });
 
         // DeepSeek R1 wraps output in <think>...</think> before JSON — strip it
@@ -195,10 +218,8 @@ CRITICAL for nodes: labels must be SHORT action phrases (3-5 words max). No desc
           const end = stripped.lastIndexOf("}");
           if (start === -1 || end === -1 || end <= start) throw new Error("No JSON found");
           solution = JSON.parse(stripped.slice(start, end + 1));
-        } catch {
-          // Log raw content for debugging
-          console.error("JSON parse failed. Raw content length:", fullContent.length);
-          console.error("Stripped preview:", stripped.slice(0, 500));
+        } catch (parseErr) {
+          console.error(JSON.stringify({ reqId, step: "json_parse_failed", contentLen: fullContent.length, strippedPreview: stripped.slice(0, 300), error: String(parseErr) }));
           send(controller, {
             progress: 100,
             done: true,
@@ -207,6 +228,9 @@ CRITICAL for nodes: labels must be SHORT action phrases (3-5 words max). No desc
           controller.close();
           return;
         }
+
+        const totalTokens = (searchResult.usage?.total_tokens ?? 0) + tokenCount;
+        log(reqId, "complete", { totalTokens, totalMs: Date.now() - t1 });
 
         // Send final solution
         send(controller, {
@@ -219,11 +243,12 @@ CRITICAL for nodes: labels must be SHORT action phrases (3-5 words max). No desc
           context: { size, stack, budget, timeline },
           citations,
           model: "perplexity/sonar-pro → jina reader → deepseek/r1",
-          tokens: (searchResult.usage?.total_tokens ?? 0) + tokenCount,
+          tokens: totalTokens,
         });
 
         controller.close();
       } catch (err) {
+        console.error(JSON.stringify({ reqId, step: "unhandled_error", error: err instanceof Error ? err.message : String(err) }));
         send(controller, {
           progress: 100,
           done: true,
