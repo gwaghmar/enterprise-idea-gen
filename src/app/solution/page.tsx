@@ -48,14 +48,40 @@ const categoryColors: Record<string, string> = {
 };
 
 // ─── Explain Popup ────────────────────────────────────────────────────────────
-function ExplainPopup({ item, solutionContext, onClose }: {
-  item: SelectedItem; solutionContext: string; onClose: () => void;
+function ExplainPopup({ item, solutionContext, fullSolution, onEdit, onClose }: {
+  item: SelectedItem; solutionContext: string;
+  fullSolution: Solution; onEdit: (s: Solution) => void; onClose: () => void;
 }) {
-  const [mode, setMode] = useState<"choose" | "explaining" | "asking">("choose");
+  const [mode, setMode] = useState<"choose" | "explaining" | "asking" | "editing">("choose");
   const [question, setQuestion] = useState("");
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editInstruction, setEditInstruction] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editDone, setEditDone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const editRef = useRef<HTMLInputElement>(null);
+
+  async function applyEdit() {
+    if (!editInstruction.trim()) return;
+    setEditing(true); setEditError("");
+    try {
+      const res = await fetch("/api/edit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ solution: fullSolution, instruction: editInstruction.trim(), selectedText: item.label }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.solution) throw new Error(data.error || "Edit failed");
+      onEdit(data.solution);
+      setEditDone(true);
+      setTimeout(onClose, 700);
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : "Could not apply that change.");
+    } finally {
+      setEditing(false);
+    }
+  }
 
   const streamExplain = useCallback(async (q?: string) => {
     setLoading(true); setResponse("");
@@ -83,6 +109,7 @@ function ExplainPopup({ item, solutionContext, onClose }: {
   }, [item, solutionContext]);
 
   useEffect(() => { if (mode === "asking" && inputRef.current) inputRef.current.focus(); }, [mode]);
+  useEffect(() => { if (mode === "editing" && editRef.current) editRef.current.focus(); }, [mode]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={onClose}>
@@ -99,6 +126,30 @@ function ExplainPopup({ item, solutionContext, onClose }: {
           <div className="flex flex-col gap-3 mt-2">
             <button onClick={() => { setMode("explaining"); streamExplain(); }} className="w-full bg-white text-black font-semibold rounded-xl py-3 text-sm hover:bg-white/90 transition-all">Explain this to me</button>
             <button onClick={() => setMode("asking")} className="w-full bg-white/8 border border-white/15 text-white font-medium rounded-xl py-3 text-sm hover:bg-white/12 transition-all">I have a question</button>
+            <button onClick={() => setMode("editing")} className="w-full bg-white/8 border border-white/15 text-white font-medium rounded-xl py-3 text-sm hover:bg-white/12 transition-all flex items-center justify-center gap-2">
+              <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4"><path d="M12 2l1.6 4.9L18.5 8.5 14 11.8 15.2 17 12 14l-3.2 3 1.2-5.2L5.5 8.5l4.9-1.6L12 2z" fill="currentColor"/></svg>
+              Change this with AI
+            </button>
+          </div>
+        )}
+        {mode === "editing" && (
+          <div className="mt-2 space-y-3">
+            {editDone ? (
+              <div className="flex items-center gap-2 text-emerald-400 text-sm py-3"><span>✓</span> Applied — updating your solution…</div>
+            ) : (
+              <>
+                <p className="text-white/50 text-xs">Describe the change — e.g. &ldquo;swap this for a cheaper tool&rdquo;, &ldquo;add a fourth phase&rdquo;, &ldquo;cut the cost estimate in half&rdquo;.</p>
+                <form onSubmit={(e) => { e.preventDefault(); applyEdit(); }} className="space-y-3">
+                  <input ref={editRef} value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)} placeholder="What should change?" disabled={editing}
+                    className="w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-white placeholder:text-white/30 text-sm focus:outline-none focus:border-white/40 disabled:opacity-50" />
+                  {editError && <p className="text-red-400 text-xs">{editError}</p>}
+                  <button type="submit" disabled={!editInstruction.trim() || editing} className="w-full bg-white text-black font-semibold rounded-xl py-3 text-sm hover:bg-white/90 disabled:opacity-40 transition-all flex items-center justify-center gap-2">
+                    {editing ? <><span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />Applying…</> : "Apply change"}
+                  </button>
+                </form>
+                <p className="text-white/25 text-xs">Updates this solution in place. Re-export or re-share to save the change.</p>
+              </>
+            )}
           </div>
         )}
         {mode === "asking" && !response && (
@@ -272,6 +323,13 @@ export default function SolutionPage() {
 
   function pick(label: string, itemType: string) { setSelectedItem({ label, itemType }); }
 
+  function handleSolutionEdit(updated: Solution) {
+    setSolution(updated);
+    rawDataRef.current = { ...rawDataRef.current, solution: updated };
+    try { sessionStorage.setItem("solution", JSON.stringify(rawDataRef.current)); } catch { /* ignore quota */ }
+    setShareUrl(null); // invalidate any prior share link — content changed
+  }
+
   async function handleShare() {
     if (shareUrl) { navigator.clipboard.writeText(shareUrl); return; }
     setSharing(true);
@@ -324,7 +382,7 @@ export default function SolutionPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {selectedItem && <ExplainPopup item={selectedItem} solutionContext={solutionContext} onClose={() => setSelectedItem(null)} />}
+      {selectedItem && <ExplainPopup item={selectedItem} solutionContext={solutionContext} fullSolution={solution} onEdit={handleSolutionEdit} onClose={() => setSelectedItem(null)} />}
       {showActivity && <ActivityModal activity={activity} focusUrl={activityFocus} onClose={() => { setShowActivity(false); setActivityFocus(null); }} />}
 
       {/* Floating "Ask AI" button on text selection */}
