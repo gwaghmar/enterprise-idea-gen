@@ -405,7 +405,9 @@ export default function Home() {
                 }, payload);
 
                 await new Promise((r) => setTimeout(r, 600));
-                sessionStorage.setItem("solution", JSON.stringify(payload));
+                // A storage throw here would be swallowed by the per-line catch
+                // and strand the user on the loading screen
+                try { sessionStorage.setItem("solution", JSON.stringify(payload)); } catch { /* storage unavailable */ }
                 router.push("/solution");
               }
             }

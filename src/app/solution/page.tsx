@@ -43,18 +43,15 @@ function downloadKpiCsv(kpis: Kpi[], title: string) {
   a.href = url;
   a.download = `${title.replace(/[^a-z0-9]/gi, "_").slice(0, 40)}_KPIs.csv`;
   a.click();
-  URL.revokeObjectURL(url);
+  // Revoking synchronously can cancel the download in some browsers
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function ticketText(t: Ticket, problem: string): string {
-  return [
-    `Title: ${t.title}`,
-    `Type: ${t.type}`,
-    `System: ${t.system}`,
-    t.assignTo ? `Assign to: ${t.assignTo}` : "",
-    "",
-    `Context: ${problem}`,
-  ].filter(Boolean).join("\n");
+  const lines = [`Title: ${t.title}`, `Type: ${t.type}`, `System: ${t.system}`];
+  if (t.assignTo) lines.push(`Assign to: ${t.assignTo}`);
+  lines.push("", `Context: ${problem}`);
+  return lines.join("\n");
 }
 
 const FlowChart = dynamic(() => import("@/components/FlowChart"), { ssr: false });

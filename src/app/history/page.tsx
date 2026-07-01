@@ -28,7 +28,13 @@ export default function HistoryPage() {
       setOpeningSid(null);
       return;
     }
-    sessionStorage.setItem("solution", JSON.stringify({ ...payload, sid: rec.sid }));
+    try {
+      sessionStorage.setItem("solution", JSON.stringify({ ...payload, sid: rec.sid }));
+    } catch {
+      setError("Could not open this solution — browser storage is unavailable.");
+      setOpeningSid(null);
+      return;
+    }
     router.push("/solution");
   }
 
