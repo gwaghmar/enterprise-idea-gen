@@ -10,12 +10,19 @@ interface Ticket { system: string; type: string; title: string; assignTo: string
 interface Permission { name: string; owner: string; why: string; }
 interface ITControl { name: string; action: string; }
 interface Risk { risk: string; severity: string; mitigation: string; }
+interface TcoLineItem { item: string; type: string; cost: string; }
+interface Kpi { metric: string; baseline?: string; target: string; timeframe?: string; }
+interface AdoptionStep { title: string; detail: string; }
 interface Solution {
   title: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
   rolloutPlaybook?: { stakeholders?: Stakeholder[]; tickets?: Ticket[] };
   approvals?: { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[] };
   vendorOutreach?: { howToReach?: string; email?: string; demoChecklist?: string[] };
+  tco?: { lineItems?: TcoLineItem[]; oneTimeSetup?: string; monthlyRecurring?: string; firstYearTotal?: string; hiddenCosts?: string[] };
+  kpis?: Kpi[];
+  adoptionPlan?: AdoptionStep[];
+  alternative?: { name: string; summary: string; tools?: string[]; estimatedCost?: string; tradeoff?: string };
 }
 interface Context {
   size: string; stack: string; budget: string; timeline: string;
@@ -153,13 +160,44 @@ function drawFlowChart(doc: jsPDF, nodes: FlowNode[], edges: FlowEdge[], originX
   });
 }
 
+// jsPDF's standard Helvetica uses WinAnsi (CP1252). Glyphs outside it (arrows,
+// checkboxes, etc.) render as garbage, so map the common ones the AI can emit
+// to ASCII. CP1252-supported chars (em/en dash, curly quotes, bullet, ellipsis)
+// are left alone.
+function sanitizeText(s: string): string {
+  return s
+    .replace(/[→⟶➔➙➜]/g, "->")
+    .replace(/←/g, "<-")
+    .replace(/[↔↕]/g, "<->")
+    .replace(/⇒/g, "=>")
+    .replace(/[☐☑☒]/g, "[ ]")
+    .replace(/[✓✔✅]/g, "v")
+    .replace(/[▶►▸]/g, ">")
+    .replace(/[●■▪]/g, "*");
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function deepSanitize<T>(v: T): T {
+  if (typeof v === "string") return sanitizeText(v) as unknown as T;
+  if (Array.isArray(v)) return v.map(deepSanitize) as unknown as T;
+  if (v && typeof v === "object") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const out: any = {};
+    for (const k of Object.keys(v)) out[k] = deepSanitize((v as Record<string, unknown>)[k]);
+    return out;
+  }
+  return v;
+}
+
 export async function generatePDF(
-  solution: Solution,
-  problem: string,
+  solutionRaw: Solution,
+  problemRaw: string,
   context: Context,
   citations: string[],
   roi?: ROI
 ): Promise<void> {
+  const solution = deepSanitize(solutionRaw);
+  const problem = sanitizeText(problemRaw);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   let page = 1;
@@ -480,6 +518,127 @@ export async function generatePDF(
 
     addPageNum(doc, page);
   });
+
+  // ══════════════════════════════════════════════
+  // PAGE — COST OF OWNERSHIP, METRICS & ALTERNATIVE
+  // ══════════════════════════════════════════════
+  const tco = solution.tco;
+  const kpis = solution.kpis;
+  const adoption = solution.adoptionPlan;
+  const alt = solution.alternative;
+  const hasCostPage =
+    (tco && ((tco.lineItems && tco.lineItems.length) || tco.firstYearTotal)) ||
+    (kpis && kpis.length) || (adoption && adoption.length) || (alt && alt.name);
+
+  if (hasCostPage) {
+    doc.addPage(); page++;
+    doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F");
+    doc.setFillColor(...C.accent); doc.rect(0, 0, W, 1.5, "F");
+    y = MT;
+    doc.setFontSize(8); doc.setTextColor(...C.light); doc.setFont("helvetica", "normal");
+    doc.text(solution.title.toUpperCase(), ML, y + 4);
+    y += 12;
+
+    function roomCost(needed: number) {
+      if (y > H - needed) {
+        addPageNum(doc, page);
+        doc.addPage(); page++;
+        doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F");
+        doc.setFillColor(...C.accent); doc.rect(0, 0, W, 1.5, "F");
+        y = MT + 6;
+      }
+    }
+
+    // TCO table
+    if (tco && ((tco.lineItems && tco.lineItems.length) || tco.firstYearTotal)) {
+      y = sectionLabel(doc, "Total Cost of Ownership", y);
+      if (tco.lineItems && tco.lineItems.length > 0) {
+        const cw = [CW - 70, 30, 40];
+        doc.setFillColor(...C.dark); doc.rect(ML, y, CW, 7, "F");
+        doc.setFontSize(7.5); doc.setTextColor(...C.white); doc.setFont("helvetica", "bold");
+        doc.text("Item", ML + 2, y + 5);
+        doc.text("Type", ML + 2 + cw[0], y + 5);
+        doc.text("Cost", ML + CW - 2, y + 5, { align: "right" });
+        y += 7;
+        tco.lineItems.forEach((li, i) => {
+          roomCost(14);
+          doc.setFillColor(...(i % 2 ? C.bgLight : C.white)); doc.rect(ML, y, CW, 8, "F");
+          doc.setFontSize(8); doc.setTextColor(...C.dark); doc.setFont("helvetica", "normal");
+          doc.text(doc.splitTextToSize(li.item, cw[0] - 4)[0], ML + 2, y + 5);
+          doc.setTextColor(...C.mid); doc.setFontSize(7.5);
+          doc.text(li.type, ML + 2 + cw[0], y + 5);
+          doc.setTextColor(...C.dark); doc.setFontSize(8);
+          doc.text(li.cost, ML + CW - 2, y + 5, { align: "right" });
+          doc.setDrawColor(...C.rule); doc.setLineWidth(0.2); doc.line(ML, y + 8, ML + CW, y + 8);
+          y += 8;
+        });
+        y += 3;
+      }
+      const totals: { label: string; val: string }[] = [
+        { label: "One-time setup", val: tco.oneTimeSetup ?? "" },
+        { label: "Monthly recurring", val: tco.monthlyRecurring ?? "" },
+        { label: "First-year total", val: tco.firstYearTotal ?? "" },
+      ].filter((t) => t.val);
+      totals.forEach(({ label, val }) => {
+        roomCost(8);
+        doc.setFontSize(8.5); doc.setTextColor(...C.mid); doc.setFont("helvetica", "normal");
+        doc.text(label, ML, y);
+        doc.setTextColor(...C.accent); doc.setFont("helvetica", "bold");
+        doc.text(val, ML + CW, y, { align: "right" });
+        y += 6;
+      });
+      if (tco.hiddenCosts && tco.hiddenCosts.length > 0) {
+        y += 2;
+        doc.setFontSize(7.5); doc.setTextColor(...C.light); doc.setFont("helvetica", "normal");
+        doc.text("HIDDEN COSTS TO BUDGET FOR", ML, y); y += 4.5;
+        tco.hiddenCosts.forEach((c) => { roomCost(8); y = wrapText(doc, `- ${c}`, ML + 2, y, CW - 4, 7.5, C.mid, "normal"); y += 1; });
+      }
+      y += 6;
+    }
+
+    // KPIs
+    if (kpis && kpis.length > 0) {
+      roomCost(24);
+      y = sectionLabel(doc, "Success Metrics", y);
+      kpis.forEach((k) => {
+        roomCost(14);
+        doc.setFontSize(8.5); doc.setTextColor(...C.dark); doc.setFont("helvetica", "bold");
+        y = wrapText(doc, k.metric, ML, y, CW, 8.5, C.dark, "bold");
+        const line = `${k.baseline ? k.baseline + "  ->  " : ""}${k.target}${k.timeframe ? `   (${k.timeframe})` : ""}`;
+        y = wrapText(doc, line, ML + 2, y, CW - 4, 7.5, C.mid, "normal");
+        y += 3;
+      });
+      y += 4;
+    }
+
+    // Adoption plan
+    if (adoption && adoption.length > 0) {
+      roomCost(24);
+      y = sectionLabel(doc, "Adoption Plan", y);
+      adoption.forEach((a, i) => {
+        roomCost(14);
+        doc.setFontSize(8.5); doc.setTextColor(...C.dark); doc.setFont("helvetica", "bold");
+        doc.text(`${i + 1}. ${a.title}`, ML, y); y += 4.5;
+        y = wrapText(doc, a.detail, ML + 4, y, CW - 8, 7.5, C.mid, "normal");
+        y += 2;
+      });
+      y += 4;
+    }
+
+    // Alternative
+    if (alt && alt.name) {
+      roomCost(30);
+      y = sectionLabel(doc, "Alternative — Option B", y);
+      doc.setFontSize(9.5); doc.setTextColor(...C.dark); doc.setFont("helvetica", "bold");
+      y = wrapText(doc, alt.name, ML, y, CW, 9.5, C.dark, "bold");
+      if (alt.summary) y = wrapText(doc, alt.summary, ML, y + 1, CW, 8, C.mid, "normal");
+      if (alt.tools && alt.tools.length) y = wrapText(doc, `Tools: ${alt.tools.join(", ")}`, ML, y + 1, CW, 7.5, C.light, "italic");
+      if (alt.estimatedCost) y = wrapText(doc, `Cost: ${alt.estimatedCost}`, ML, y + 1, CW, 7.5, C.mid, "normal");
+      if (alt.tradeoff) y = wrapText(doc, `Tradeoff: ${alt.tradeoff}`, ML, y + 1, CW, 7.5, C.mid, "italic");
+    }
+
+    addPageNum(doc, page);
+  }
 
   // ══════════════════════════════════════════════
   // PAGE — ROLLOUT PLAYBOOK, APPROVALS & VENDOR OUTREACH

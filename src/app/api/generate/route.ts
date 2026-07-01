@@ -130,13 +130,7 @@ Be specific: name exact products, pricing tiers, integration methods, compliance
         send(controller, { progress: 63, step: 3, message: "Claude synthesizing your solution..." });
         const t3 = Date.now();
 
-        const synthesisStream = await openrouter.chat.completions.create({
-          model: "anthropic/claude-sonnet-4-5",
-          stream: true,
-          max_tokens: 6000,
-          messages: [{
-            role: "user",
-            content: `You are a senior enterprise solution architect with 20 years of experience at McKinsey and Gartner. Build a specific, opinionated solution — not a generic overview. You cover not just WHICH tools, but exactly HOW to get them approved and rolled out inside this specific company.
+        const synthesisPrompt = `You are a senior enterprise solution architect with 20 years of experience at McKinsey and Gartner. Build a specific, opinionated solution — not a generic overview. You cover not just WHICH tools, but exactly HOW to get them approved and rolled out inside this specific company.
 
 COMPANY PROFILE:
 - Problem: "${problem}"
@@ -170,6 +164,10 @@ CRITICAL — the rollout playbook, approvals, and vendor outreach MUST be tailor
 - If "${size}" is SMB or Enterprise: assume real red tape. Name the internal roles/teams to involve (IT/Security, Legal, Procurement, Finance, Data/DBA), the exact TICKET to file (e.g. "Jira Service Desk → New Software Request" or "ServiceNow → Procurement Request"), who onboards the vendor, who provisions the database/application, and required IT controls: SSO/SAML provisioning, CASB allow-listing (e.g. Netskope/Zscaler), firewall IP allow-listing, DPA/data-processing agreement, and a security/IP (intellectual-property & infosec) risk review.
 - riskAssessment: list the top real risks (security, data, vendor lock-in, adoption) with a severity and a concrete mitigation.
 - vendorOutreach.email must be a ready-to-send short intro email the requester can copy-paste to the vendor.
+- tco: give a REAL total cost of ownership using ~${seats} seats — include one-time setup, recurring, and honest hidden costs (internal eng time, training, data migration). Numbers must add up.
+- kpis: 3-4 measurable targets with a baseline and a timeframe — no vague "improve efficiency".
+- adoptionPlan: 3-4 concrete steps to prevent this becoming shelfware (champion, training, rollout comms).
+- alternative: propose ONE genuinely cheaper/faster/simpler fallback (Option B) with an honest tradeoff — do not just restate the main recommendation.
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
@@ -232,6 +230,28 @@ Return ONLY valid JSON, no markdown, no explanation:
   ],
   "estimatedCost": "Itemized: Tool A $X/mo + Tool B $Y/mo = $Z/mo total",
   "timeToImplement": "Realistic timeline for ${size} with ${timeline} urgency",
+  "tco": {
+    "lineItems": [
+      { "item": "Exact cost line — e.g. Workato subscription", "type": "Recurring | One-time", "cost": "e.g. $2,000/mo or $5,000" }
+    ],
+    "oneTimeSetup": "Total one-time/setup cost — e.g. $6,500 (implementation + training + data migration)",
+    "monthlyRecurring": "Total recurring — e.g. $2,400/mo",
+    "firstYearTotal": "One-time + 12 months recurring — e.g. $35,300",
+    "hiddenCosts": ["A real hidden cost most teams miss — e.g. internal eng time for setup", "Another"]
+  },
+  "kpis": [
+    { "metric": "What to measure — e.g. Manual reconciliation hours/week", "baseline": "Where they are now — e.g. 15 hrs/week", "target": "Where they should get to — e.g. < 2 hrs/week", "timeframe": "By when — e.g. End of Phase 2" }
+  ],
+  "adoptionPlan": [
+    { "title": "Short adoption step — e.g. Name an internal champion", "detail": "Concrete detail on how to drive adoption and avoid this becoming shelfware" }
+  ],
+  "alternative": {
+    "name": "Option B — a cheaper/faster/simpler fallback approach (name it)",
+    "summary": "1-2 sentences on this alternative and when to prefer it",
+    "tools": ["Alternative tool 1", "Alternative tool 2"],
+    "estimatedCost": "Itemized cost for the alternative",
+    "tradeoff": "The honest tradeoff vs the recommended approach — what you give up to save money/time"
+  },
   "rolloutPlaybook": {
     "stakeholders": [
       { "role": "e.g. IT Security Lead / Founder / DBA", "team": "e.g. IT / Security", "responsibility": "What they own — e.g. approves vendor, provisions the database, onboards the app", "whenToContact": "e.g. Before purchase / Week 1" }
@@ -258,8 +278,13 @@ Return ONLY valid JSON, no markdown, no explanation:
   }
 }
 
-Node labels: 3-5 words MAX. Node IDs must be unique (p1_, p2_, p3_ prefixes).`,
-          }],
+Node labels: 3-5 words MAX. Node IDs must be unique (p1_, p2_, p3_ prefixes).`;
+
+        const synthesisStream = await openrouter.chat.completions.create({
+          model: "anthropic/claude-sonnet-4-5",
+          stream: true,
+          max_tokens: 8000,
+          messages: [{ role: "user", content: synthesisPrompt }],
           temperature: 0.3,
         });
 
@@ -280,17 +305,35 @@ Node labels: 3-5 words MAX. Node IDs must be unique (p1_, p2_, p3_ prefixes).`,
         send(controller, { progress: 93, step: 3, message: "Parsing solution..." });
 
         // Claude returns clean JSON — no <think> tags to strip
+        function tryParse(text: string) {
+          const start = text.indexOf("{");
+          const end = text.lastIndexOf("}");
+          if (start === -1 || end === -1 || end <= start) throw new Error("No JSON found");
+          return JSON.parse(text.slice(start, end + 1));
+        }
+
         let solution;
         try {
-          const start = fullContent.indexOf("{");
-          const end = fullContent.lastIndexOf("}");
-          if (start === -1 || end === -1 || end <= start) throw new Error("No JSON found");
-          solution = JSON.parse(fullContent.slice(start, end + 1));
+          solution = tryParse(fullContent);
         } catch (parseErr) {
-          console.error(JSON.stringify({ reqId, step: "json_parse_failed", contentLen: fullContent.length, preview: fullContent.slice(0, 300), error: String(parseErr) }));
-          send(controller, { progress: 100, done: true, error: "AI returned an incomplete response. Please try again." });
-          controller.close();
-          return;
+          // One retry — re-run the synthesis non-streamed before giving up
+          console.error(JSON.stringify({ reqId, step: "json_parse_failed", attempt: 1, contentLen: fullContent.length, preview: fullContent.slice(0, 300), error: String(parseErr) }));
+          send(controller, { progress: 94, step: 3, message: "Refining the solution..." });
+          try {
+            const retry = await openrouter.chat.completions.create({
+              model: "anthropic/claude-sonnet-4-5",
+              max_tokens: 8000,
+              messages: [{ role: "user", content: synthesisPrompt }],
+              temperature: 0.2,
+            });
+            solution = tryParse(retry.choices[0].message.content || "");
+            log(reqId, "json_retry_ok", {});
+          } catch (retryErr) {
+            console.error(JSON.stringify({ reqId, step: "json_parse_failed", attempt: 2, error: String(retryErr) }));
+            send(controller, { progress: 100, done: true, error: "AI returned an incomplete response. Please try again." });
+            controller.close();
+            return;
+          }
         }
 
         const totalTokens = (searchResult.usage?.total_tokens ?? 0) + tokenCount;

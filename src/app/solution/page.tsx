@@ -21,10 +21,16 @@ interface Risk { risk: string; severity: string; mitigation: string; }
 interface RolloutPlaybook { stakeholders?: Stakeholder[]; tickets?: Ticket[]; }
 interface Approvals { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[]; }
 interface VendorOutreach { howToReach?: string; email?: string; demoChecklist?: string[]; }
+interface TcoLineItem { item: string; type: string; cost: string; }
+interface Tco { lineItems?: TcoLineItem[]; oneTimeSetup?: string; monthlyRecurring?: string; firstYearTotal?: string; hiddenCosts?: string[]; }
+interface Kpi { metric: string; baseline?: string; target: string; timeframe?: string; }
+interface AdoptionStep { title: string; detail: string; }
+interface Alternative { name: string; summary: string; tools?: string[]; estimatedCost?: string; tradeoff?: string; }
 interface Solution {
   title: string; insight?: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
   rolloutPlaybook?: RolloutPlaybook; approvals?: Approvals; vendorOutreach?: VendorOutreach;
+  tco?: Tco; kpis?: Kpi[]; adoptionPlan?: AdoptionStep[]; alternative?: Alternative;
 }
 interface Context {
   size: string; stack: string; budget: string; timeline: string;
@@ -323,6 +329,60 @@ export default function SolutionPage() {
           <ROICalculator estimatedCost={solution.estimatedCost} />
         </div>
 
+        {/* Total Cost of Ownership */}
+        {solution.tco && (solution.tco.lineItems?.length || solution.tco.firstYearTotal) && (
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Total Cost of Ownership</h2>
+            <p className="text-white/40 text-sm mb-4">The real number — setup, recurring, and the costs most teams forget.</p>
+            <div className="bg-white/3 border border-white/10 rounded-2xl p-5">
+              {solution.tco.lineItems && solution.tco.lineItems.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-white/10 mb-5">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-white/5 text-white/40 text-xs uppercase tracking-wider">
+                        <th className="text-left font-medium px-4 py-2.5">Item</th>
+                        <th className="text-left font-medium px-4 py-2.5">Type</th>
+                        <th className="text-right font-medium px-4 py-2.5">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {solution.tco.lineItems.map((li, i) => (
+                        <tr key={i} className="border-t border-white/8">
+                          <td className="px-4 py-2.5 text-white/80">{li.item}</td>
+                          <td className="px-4 py-2.5 text-white/45">{li.type}</td>
+                          <td className="px-4 py-2.5 text-white/80 text-right tabular-nums">{li.cost}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { label: "One-time setup", value: solution.tco.oneTimeSetup },
+                  { label: "Monthly recurring", value: solution.tco.monthlyRecurring },
+                  { label: "First-year total", value: solution.tco.firstYearTotal, highlight: true },
+                ].filter((m) => m.value).map((m) => (
+                  <div key={m.label} className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
+                    <p className="text-white/40 text-xs mb-1">{m.label}</p>
+                    <p className={`font-bold text-base ${m.highlight ? "text-emerald-400" : "text-white"}`}>{m.value}</p>
+                  </div>
+                ))}
+              </div>
+              {solution.tco.hiddenCosts && solution.tco.hiddenCosts.length > 0 && (
+                <div className="mt-4 border-t border-white/10 pt-3">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Hidden costs to budget for</p>
+                  <ul className="space-y-1">
+                    {solution.tco.hiddenCosts.map((c, i) => (
+                      <li key={i} className="flex gap-2 text-sm text-white/60"><span className="text-yellow-500/70 shrink-0">⚠</span><span>{c}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Tools */}
         <div className="mb-12">
           <h2 className="text-xl font-semibold mb-4">Recommended Tools</h2>
@@ -372,6 +432,34 @@ export default function SolutionPage() {
           </div>
         </div>
 
+        {/* Alternative — Option B */}
+        {solution.alternative && solution.alternative.name && (
+          <div className="mb-12">
+            <div className="bg-white/3 border border-dashed border-white/20 rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs px-2 py-0.5 rounded-full border border-white/20 text-white/50">Alternative</span>
+                <h2 className="text-lg font-semibold">{solution.alternative.name}</h2>
+              </div>
+              <p className="text-white/60 text-sm mb-3">{solution.alternative.summary}</p>
+              {solution.alternative.tools && solution.alternative.tools.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {solution.alternative.tools.map((t, i) => (
+                    <span key={i} className="text-xs bg-white/8 border border-white/15 rounded-full px-3 py-1 text-white/60">{t}</span>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-col sm:flex-row gap-3 text-sm">
+                {solution.alternative.estimatedCost && (
+                  <div className="flex-1"><span className="text-white/40 text-xs uppercase tracking-wider">Cost</span><p className="text-white/70">{solution.alternative.estimatedCost}</p></div>
+                )}
+                {solution.alternative.tradeoff && (
+                  <div className="flex-1"><span className="text-white/40 text-xs uppercase tracking-wider">Tradeoff</span><p className="text-white/70">{solution.alternative.tradeoff}</p></div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Implementation phases with per-phase flowcharts */}
         {solution.phases && solution.phases.length > 0 && (
           <div className="mb-12">
@@ -406,6 +494,46 @@ export default function SolutionPage() {
                         </div>
                       </div>
                     )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Success Metrics / KPIs */}
+        {solution.kpis && solution.kpis.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Success Metrics</h2>
+            <p className="text-white/40 text-sm mb-4">How you&apos;ll know it worked — measurable, with a baseline and a deadline.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {solution.kpis.map((k, i) => (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <p className="text-white font-medium text-sm mb-2">{k.metric}</p>
+                  <div className="flex items-center gap-2 text-sm">
+                    {k.baseline && <span className="text-white/40 line-through">{k.baseline}</span>}
+                    {k.baseline && <span className="text-white/30">→</span>}
+                    <span className="text-emerald-400 font-semibold">{k.target}</span>
+                  </div>
+                  {k.timeframe && <p className="text-white/35 text-xs mt-2">🎯 {k.timeframe}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Adoption Plan */}
+        {solution.adoptionPlan && solution.adoptionPlan.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Adoption Plan</h2>
+            <p className="text-white/40 text-sm mb-4">Stop it becoming shelfware — how to get your team actually using it.</p>
+            <div className="space-y-2">
+              {solution.adoptionPlan.map((a, i) => (
+                <div key={i} className="flex gap-3 bg-white/5 border border-white/10 rounded-xl p-4">
+                  <span className="w-6 h-6 rounded-full bg-white/15 text-white text-xs flex items-center justify-center font-semibold shrink-0">{i + 1}</span>
+                  <div>
+                    <p className="text-white text-sm font-medium">{a.title}</p>
+                    <p className="text-white/55 text-sm mt-0.5">{a.detail}</p>
                   </div>
                 </div>
               ))}
