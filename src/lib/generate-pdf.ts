@@ -138,7 +138,7 @@ function drawFlowChart(doc: jsPDF, nodes: FlowNode[], edges: FlowEdge[], originX
     doc.setTextColor(...c.text);
     doc.setFont("helvetica", "bold");
     const label = doc.splitTextToSize(n.label, nw - 3);
-    doc.text(label, x + nw / 2, y + nh / 2 + 2, { align: "center" });
+    doc.text(label[0] ?? "", x + nw / 2, y + nh / 2 + 2, { align: "center" });
   });
 }
 

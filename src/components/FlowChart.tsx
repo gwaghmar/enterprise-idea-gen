@@ -78,7 +78,7 @@ function buildDagreLayout(nodes: FlowNode[], edges: FlowEdge[]): Node[] {
         padding: "8px 12px",
         width: NODE_WIDTH,
         fontSize: 13,
-        fontFamily: "var(--font-inter), Inter, sans-serif",
+        fontFamily: "var(--font-geist-sans), sans-serif",
         boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
       },
     };
@@ -92,7 +92,7 @@ function FlowChartInner({ nodes, edges }: Props) {
     source: e.from,
     target: e.to,
     label: e.label || "",
-    labelStyle: { fill: "#5F6368", fontSize: 11, fontWeight: 500, fontFamily: "var(--font-inter), Inter, sans-serif" },
+    labelStyle: { fill: "#5F6368", fontSize: 11, fontWeight: 500, fontFamily: "var(--font-geist-sans), sans-serif" },
     labelBgStyle: { fill: "#fff", fillOpacity: 0.9 },
     labelBgPadding: [4, 6] as [number, number],
     labelBgBorderRadius: 4,
