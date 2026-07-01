@@ -7,14 +7,14 @@ function send(controller: ReadableStreamDefaultController, data: object) {
   controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 }
 
+// Parallel Jina fetch — 5s timeout, 4500 chars per source
 async function jinaFetch(url: string): Promise<string> {
   try {
     const res = await fetch(`https://r.jina.ai/${url}`, {
       headers: { Accept: "text/plain" },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(5000),
     });
-    const text = await res.text();
-    return text.slice(0, 3000);
+    return (await res.text()).slice(0, 4500);
   } catch {
     return "";
   }
@@ -50,32 +50,36 @@ export async function POST(req: NextRequest) {
     apiKey: process.env.OPENROUTER_API_KEY!,
   });
 
-  const userContext = `Company: ${size} | Stack: ${stack} | Budget: ${budget} | Timeline: ${timeline}`;
-
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Step 1 — Perplexity web search
-        send(controller, { progress: 5, step: 1, message: "Connecting to Perplexity Sonar Pro..." });
+        // ── Step 1: Perplexity — targeted enterprise research ──────────────
+        send(controller, { progress: 5, step: 1, message: "Searching for enterprise tools and case studies..." });
         const t1 = Date.now();
 
         const searchResult = await openrouter.chat.completions.create({
           model: "perplexity/sonar-pro",
           messages: [{
             role: "user",
-            content: `Research the best enterprise solution for this problem:
-Problem: "${problem}"
-Context: ${userContext}
+            content: `You are an enterprise technology researcher. Find the best real-world solutions for this specific problem.
 
-Search for:
-- Best tools and platforms for this specific use case
-- Real pricing and integration details
-- Implementation approaches used by similar companies
-- Limitations and tradeoffs of top options
+COMPANY PROFILE:
+- Problem: "${problem}"
+- Company size: ${size}
+- Current tech stack: ${stack}
+- Monthly budget: ${budget}
+- Implementation timeline: ${timeline}
 
-Be specific about tool names, pricing tiers, and integration capabilities.`,
+Find and compare:
+1. The top 3-5 enterprise tools that solve this exact problem AND natively integrate with ${stack}
+2. Real pricing for each tool at the ${size} tier (not just "contact sales" — find published pricing)
+3. A real case study of a ${size} company that solved this same problem (name the company, tool used, outcome)
+4. The #1 mistake companies make when solving this problem
+5. Any open-source or lower-cost alternatives if budget is tight
+
+Be specific: name exact products, pricing tiers, integration methods, and implementation timeframes.`,
           }],
-          temperature: 0.3,
+          temperature: 0.2,
         });
 
         const searchContent = searchResult.choices[0].message.content || "";
@@ -84,167 +88,156 @@ Be specific about tool names, pricing tiers, and integration capabilities.`,
         log(reqId, "perplexity_done", { ms: Date.now() - t1, citations: citations.length, tokens: searchResult.usage?.total_tokens });
 
         send(controller, {
-          progress: 30,
-          step: 1,
-          message: `Perplexity found ${citations.length} sources`,
-          citations,
-          done: false,
+          progress: 30, step: 1,
+          message: citations.length > 0 ? `Found ${citations.length} sources` : "Research complete",
+          citations, done: false,
         });
 
-        // Step 2 — Jina reads each source
-        const topUrls = citations.slice(0, 3);
-        const jinaContents: string[] = [];
-        const t2 = Date.now();
+        // ── Step 2: Jina — parallel source reading (skip if no citations) ──
+        let sourceContent = "";
+        if (citations.length > 0) {
+          const topUrls = citations.slice(0, 4);
+          send(controller, { progress: 35, step: 2, message: `Reading ${topUrls.length} sources in parallel...` });
+          const t2 = Date.now();
 
-        for (let i = 0; i < topUrls.length; i++) {
-          send(controller, {
-            progress: 35 + i * 10,
-            step: 2,
-            message: `Reading source ${i + 1} of ${topUrls.length}: ${new URL(topUrls[i]).hostname}`,
-          });
-          const content = await jinaFetch(topUrls[i]);
-          jinaContents.push(content);
-          log(reqId, `jina_source_${i + 1}`, { url: topUrls[i], chars: content.length });
+          const jinaResults = await Promise.all(topUrls.map((url) => jinaFetch(url)));
+          sourceContent = topUrls
+            .map((url, i) => jinaResults[i] ? `SOURCE: ${url}\n${jinaResults[i]}` : "")
+            .filter(Boolean)
+            .join("\n\n---\n\n");
+
+          log(reqId, "jina_done", { ms: Date.now() - t2, sourcesRead: jinaResults.filter(Boolean).length });
+          send(controller, { progress: 58, step: 2, message: `Read ${jinaResults.filter(Boolean).length} sources` });
+        } else {
+          send(controller, { progress: 58, step: 2, message: "Proceeding with research findings" });
         }
 
-        const sourceContent = topUrls
-          .map((url, i) => jinaContents[i] ? `SOURCE: ${url}\n${jinaContents[i]}` : "")
-          .filter(Boolean)
-          .join("\n\n---\n\n");
-
-        log(reqId, "jina_done", { ms: Date.now() - t2, sourcesRead: jinaContents.filter(Boolean).length });
-        send(controller, {
-          progress: 60,
-          step: 2,
-          message: `Read ${jinaContents.filter(Boolean).length} sources in full`,
-        });
-
-        // Step 3 — DeepSeek R1 reasoning (streaming)
-        send(controller, {
-          progress: 65,
-          step: 3,
-          message: "DeepSeek R1 starting to reason...",
-        });
+        // ── Step 3: Claude Sonnet — structured solution synthesis ──────────
+        send(controller, { progress: 63, step: 3, message: "Claude synthesizing your solution..." });
         const t3 = Date.now();
 
-        const reasoningStream = await openrouter.chat.completions.create({
-          model: "deepseek/deepseek-r1",
+        const synthesisStream = await openrouter.chat.completions.create({
+          model: "anthropic/claude-sonnet-4-5",
           stream: true,
+          max_tokens: 4000,
           messages: [{
             role: "user",
-            content: `You are an enterprise solution architect. Reason carefully and build a specific, actionable solution.
+            content: `You are a senior enterprise solution architect with 20 years of experience at McKinsey and Gartner. Build a specific, opinionated solution — not a generic overview.
 
-USER CONTEXT:
+COMPANY PROFILE:
 - Problem: "${problem}"
 - Company size: ${size}
 - Current stack: ${stack}
-- Budget: ${budget}
+- Budget: ${budget}/month
 - Timeline: ${timeline}
 
-RESEARCH FINDINGS (from live web search):
+LIVE RESEARCH (from web search):
 ${searchContent}
 
-FULL SOURCE CONTENT (read from top sources):
-${sourceContent || "No additional source content available."}
+${sourceContent ? `FULL SOURCE CONTENT:\n${sourceContent}` : ""}
 
-Based on ALL of the above, build a solution that is:
-- Specific to this company's size, stack, and budget
-- Uses tools that actually integrate with ${stack}
-- Realistic for a ${timeline} timeline
-- Within ${budget} budget
+INSTRUCTIONS:
+- Pick ONE clear solution approach (don't hedge with "you could also...")
+- Lead with the insight most companies miss about this problem
+- Choose tools that ACTUALLY integrate with ${stack} — verify from the research above
+- Match tool tier to ${budget} budget — no enterprise-only tools if budget is tight
+- Be realistic about ${timeline} — what's truly achievable vs what needs more time
+- vendorQuestions should be sharp negotiation questions, not generic
 
-Return ONLY valid JSON:
+Return ONLY valid JSON, no markdown, no explanation:
 {
-  "title": "Specific solution title (not generic)",
-  "summary": "2-3 sentences. Be specific about what tools, why these tools for their stack, and what outcome they get.",
+  "title": "Specific 4-8 word solution title",
+  "insight": "The one thing most companies get wrong about this problem, in 1-2 sentences.",
+  "summary": "2-3 sentences: what the solution is, which tools, and what measurable outcome they get.",
   "tools": [
     {
-      "name": "Exact tool name",
-      "purpose": "What it does in this solution",
-      "category": "Category",
-      "whyForYou": "Why this specifically for ${size} on ${stack} within ${budget}",
-      "vendorQuestions": ["Question to ask vendor before buying", "Question about integration", "Question about pricing/contract"]
+      "name": "Exact product name",
+      "purpose": "What it does in this solution specifically",
+      "category": "One of: Integration | Automation | CRM | Analytics | Storage | Security | Infrastructure | Communication",
+      "whyForYou": "Why this tool for ${size} on ${stack} within ${budget} — be specific",
+      "vendorQuestions": [
+        "Specific question about native ${stack} integration",
+        "Question about pricing at ${size} scale",
+        "Question about implementation support or SLA"
+      ]
     }
   ],
   "phases": [
     {
       "title": "Phase 1 — Week 1-2",
-      "actions": ["Specific action", "Specific action"],
+      "actions": ["Concrete action with owner and output", "Another concrete action"],
       "nodes": [
-        { "id": "p1_1", "label": "3-5 word action", "type": "start|process|decision|end" }
+        { "id": "p1_1", "label": "Short action phrase", "type": "start" },
+        { "id": "p1_2", "label": "Short action phrase", "type": "process" },
+        { "id": "p1_3", "label": "Short action phrase", "type": "end" }
       ],
       "edges": [
-        { "from": "p1_1", "to": "p1_2", "label": "optional" }
+        { "from": "p1_1", "to": "p1_2" },
+        { "from": "p1_2", "to": "p1_3" }
       ]
     },
     {
       "title": "Phase 2 — Week 3-4",
-      "actions": ["Specific action"],
+      "actions": ["Concrete action"],
       "nodes": [
-        { "id": "p2_1", "label": "3-5 word action", "type": "start|process|decision|end" }
+        { "id": "p2_1", "label": "Short action phrase", "type": "start" },
+        { "id": "p2_2", "label": "Short action phrase", "type": "process" },
+        { "id": "p2_3", "label": "Short action phrase", "type": "end" }
       ],
       "edges": [
-        { "from": "p2_1", "to": "p2_2" }
+        { "from": "p2_1", "to": "p2_2" },
+        { "from": "p2_2", "to": "p2_3" }
       ]
     },
     {
       "title": "Phase 3 — Month 2+",
-      "actions": ["Specific action"],
+      "actions": ["Concrete action"],
       "nodes": [
-        { "id": "p3_1", "label": "3-5 word action", "type": "start|process|decision|end" }
+        { "id": "p3_1", "label": "Short action phrase", "type": "start" },
+        { "id": "p3_2", "label": "Short action phrase", "type": "process" },
+        { "id": "p3_3", "label": "Short action phrase", "type": "end" }
       ],
-      "edges": []
+      "edges": [
+        { "from": "p3_1", "to": "p3_2" },
+        { "from": "p3_2", "to": "p3_3" }
+      ]
     }
   ],
-  "estimatedCost": "Specific monthly cost breakdown",
-  "timeToImplement": "Realistic estimate for ${size}"
+  "estimatedCost": "Itemized: Tool A $X/mo + Tool B $Y/mo = $Z/mo total",
+  "timeToImplement": "Realistic timeline for ${size} with ${timeline} urgency"
 }
 
-CRITICAL for nodes: labels must be SHORT action phrases (3-5 words max). No descriptions. Each phase should have 3-5 nodes showing the workflow for THAT phase only. Node IDs must be unique across all phases (prefix with phase number like p1_, p2_, p3_).`,
+Node labels: 3-5 words MAX. Node IDs must be unique (p1_, p2_, p3_ prefixes).`,
           }],
-          temperature: 0.5,
+          temperature: 0.3,
         });
 
-        // Stream DeepSeek tokens, update progress 65→90
         let fullContent = "";
         let tokenCount = 0;
 
-        for await (const chunk of reasoningStream) {
+        for await (const chunk of synthesisStream) {
           const delta = chunk.choices[0]?.delta?.content || "";
           fullContent += delta;
           tokenCount++;
-
-          // Send progress every 20 tokens
-          if (tokenCount % 20 === 0) {
-            const progress = Math.min(90, 65 + Math.floor((tokenCount / 300) * 25));
-            send(controller, {
-              progress,
-              step: 3,
-              message: `DeepSeek R1 reasoning... (${tokenCount} tokens)`,
-            });
+          if (tokenCount % 15 === 0) {
+            const progress = Math.min(90, 63 + Math.floor((tokenCount / 250) * 27));
+            send(controller, { progress, step: 3, message: `Building your solution... (${tokenCount} tokens)` });
           }
         }
 
-        log(reqId, "deepseek_done", { ms: Date.now() - t3, tokens: tokenCount, contentLen: fullContent.length });
-        send(controller, { progress: 92, step: 3, message: "Parsing solution..." });
+        log(reqId, "claude_done", { ms: Date.now() - t3, tokens: tokenCount, contentLen: fullContent.length });
+        send(controller, { progress: 93, step: 3, message: "Parsing solution..." });
 
-        // DeepSeek R1 wraps output in <think>...</think> before JSON — strip it
-        const stripped = fullContent.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-
-        // Find the outermost complete JSON object
+        // Claude returns clean JSON — no <think> tags to strip
         let solution;
         try {
-          const start = stripped.indexOf("{");
-          const end = stripped.lastIndexOf("}");
+          const start = fullContent.indexOf("{");
+          const end = fullContent.lastIndexOf("}");
           if (start === -1 || end === -1 || end <= start) throw new Error("No JSON found");
-          solution = JSON.parse(stripped.slice(start, end + 1));
+          solution = JSON.parse(fullContent.slice(start, end + 1));
         } catch (parseErr) {
-          console.error(JSON.stringify({ reqId, step: "json_parse_failed", contentLen: fullContent.length, strippedPreview: stripped.slice(0, 300), error: String(parseErr) }));
-          send(controller, {
-            progress: 100,
-            done: true,
-            error: "AI returned an incomplete response. Please try again.",
-          });
+          console.error(JSON.stringify({ reqId, step: "json_parse_failed", contentLen: fullContent.length, preview: fullContent.slice(0, 300), error: String(parseErr) }));
+          send(controller, { progress: 100, done: true, error: "AI returned an incomplete response. Please try again." });
           controller.close();
           return;
         }
@@ -252,38 +245,25 @@ CRITICAL for nodes: labels must be SHORT action phrases (3-5 words max). No desc
         const totalTokens = (searchResult.usage?.total_tokens ?? 0) + tokenCount;
         log(reqId, "complete", { totalTokens, totalMs: Date.now() - t1 });
 
-        // Send final solution
         send(controller, {
-          progress: 100,
-          step: 4,
-          message: "Solution ready",
-          done: true,
-          solution,
-          problem,
+          progress: 100, step: 4, message: "Solution ready", done: true,
+          solution, problem,
           context: { size, stack, budget, timeline },
           citations,
-          model: "perplexity/sonar-pro → jina reader → deepseek/r1",
+          model: "perplexity/sonar-pro → jina (parallel) → claude/sonnet-4-5",
           tokens: totalTokens,
         });
 
         controller.close();
       } catch (err) {
         console.error(JSON.stringify({ reqId, step: "unhandled_error", error: err instanceof Error ? err.message : String(err) }));
-        send(controller, {
-          progress: 100,
-          done: true,
-          error: err instanceof Error ? err.message : "Unknown error",
-        });
+        send(controller, { progress: 100, done: true, error: err instanceof Error ? err.message : "Unknown error" });
         controller.close();
       }
     },
   });
 
   return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
+    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
   });
 }

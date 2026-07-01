@@ -14,7 +14,7 @@ interface FlowNode { id: string; label: string; type: string; }
 interface FlowEdge { from: string; to: string; label?: string; }
 interface Phase { title: string; actions: string[]; nodes?: FlowNode[]; edges?: FlowEdge[]; }
 interface Solution {
-  title: string; summary: string; tools: Tool[];
+  title: string; insight?: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
 }
 interface Context { size: string; stack: string; budget: string; timeline: string; }
@@ -275,8 +275,14 @@ export default function SolutionPage() {
           <p className="text-white/70 italic border-l-2 border-white/20 pl-4">{problem}</p>
         </div>
 
-        {/* Title + summary */}
-        <h1 className="text-4xl font-bold mb-3">{solution.title}</h1>
+        {/* Title + insight + summary */}
+        <h1 className="text-4xl font-bold mb-4">{solution.title}</h1>
+        {solution.insight && (
+          <div className="flex gap-3 bg-white/5 border border-white/15 rounded-xl px-5 py-4 mb-6 max-w-3xl">
+            <span className="text-white/40 text-lg shrink-0">💡</span>
+            <p className="text-white/80 text-sm leading-relaxed italic">{solution.insight}</p>
+          </div>
+        )}
         <p className="text-white/60 text-lg mb-10 max-w-3xl">{solution.summary}</p>
 
         {/* Executive Summary */}
