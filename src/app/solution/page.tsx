@@ -185,8 +185,28 @@ export default function SolutionPage() {
   const [sharing, setSharing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [roiData, setRoiData] = useState<{ weeklyHours: number; teamSize: number; hourlyRate: number } | null>(null);
+  const [askBtn, setAskBtn] = useState<{ text: string; top: number; left: number } | null>(null);
   const router = useRouter();
   const rawDataRef = useRef<Record<string, unknown>>({});
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Show a floating "Ask AI" button when the user selects text inside the report
+  useEffect(() => {
+    function onSelect() {
+      const sel = window.getSelection();
+      const text = sel?.toString().trim() ?? "";
+      if (!sel || text.length < 3 || text.length > 600 || sel.rangeCount === 0) { setAskBtn(null); return; }
+      const range = sel.getRangeAt(0);
+      const container = contentRef.current;
+      if (!container || !container.contains(range.commonAncestorContainer)) { setAskBtn(null); return; }
+      const rect = range.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) { setAskBtn(null); return; }
+      setAskBtn({ text, top: rect.top + window.scrollY - 44, left: rect.left + window.scrollX + rect.width / 2 });
+    }
+    document.addEventListener("mouseup", onSelect);
+    document.addEventListener("selectionchange", () => { if (!window.getSelection()?.toString().trim()) setAskBtn(null); });
+    return () => document.removeEventListener("mouseup", onSelect);
+  }, []);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("solution");
@@ -261,7 +281,20 @@ export default function SolutionPage() {
     <div className="min-h-screen bg-black text-white">
       {selectedItem && <ExplainPopup item={selectedItem} solutionContext={solutionContext} onClose={() => setSelectedItem(null)} />}
 
-      <div className="max-w-5xl mx-auto px-6 py-12">
+      {/* Floating "Ask AI" button on text selection */}
+      {askBtn && (
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { pick(askBtn.text, "Selected text"); setAskBtn(null); window.getSelection()?.removeAllRanges(); }}
+          style={{ position: "absolute", top: askBtn.top, left: askBtn.left, transform: "translateX(-50%)" }}
+          className="z-40 flex items-center gap-1.5 bg-white text-black text-xs font-semibold rounded-full px-3 py-1.5 shadow-xl shadow-black/40 hover:bg-white/90 transition-all animate-in fade-in"
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5"><path d="M12 2l1.9 5.8L20 9.7l-5.1 3.7L16 20l-4-3.5L8 20l1.1-6.6L4 9.7l6.1-1.9L12 2z" fill="currentColor"/></svg>
+          Ask AI
+        </button>
+      )}
+
+      <div ref={contentRef} className="max-w-5xl mx-auto px-6 py-12">
 
         {/* Top nav */}
         <div className="flex items-center justify-between mb-8">
@@ -700,11 +733,26 @@ export default function SolutionPage() {
             {tokens && <span>Tokens used: <span className="text-white/70">{tokens.toLocaleString()}</span></span>}
           </div>
           {showSources && citations.length > 0 && (
-            <ul className="space-y-1 border-t border-white/10 pt-3">
-              {citations.map((url, i) => (
-                <li key={i}><a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 truncate block">{url}</a></li>
-              ))}
-            </ul>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border-t border-white/10 pt-3">
+              {citations.map((url, i) => {
+                let host = url;
+                try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep raw */ }
+                return (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                    className="group flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 hover:border-white/25 hover:bg-white/8 transition-all">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`https://www.google.com/s2/favicons?domain=${host}&sz=64`} alt="" width={20} height={20}
+                      className="w-5 h-5 rounded shrink-0 bg-white/10"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                    <div className="min-w-0">
+                      <p className="text-sm text-white/80 group-hover:text-white truncate">{host}</p>
+                      <p className="text-xs text-white/35 truncate">{url.replace(/^https?:\/\//, "")}</p>
+                    </div>
+                    <span className="ml-auto text-white/20 group-hover:text-white/50 transition-colors shrink-0">↗</span>
+                  </a>
+                );
+              })}
+            </div>
           )}
         </div>
 
