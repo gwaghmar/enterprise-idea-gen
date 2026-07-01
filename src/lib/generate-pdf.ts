@@ -490,7 +490,7 @@ export async function generatePDF(
   const hasRollout =
     (rp && ((rp.stakeholders && rp.stakeholders.length) || (rp.tickets && rp.tickets.length))) ||
     (ap && ((ap.permissions && ap.permissions.length) || (ap.itControls && ap.itControls.length) || (ap.riskAssessment && ap.riskAssessment.length))) ||
-    (vo && (vo.email || (vo.demoChecklist && vo.demoChecklist.length)));
+    (vo && (vo.howToReach || vo.email || (vo.demoChecklist && vo.demoChecklist.length)));
 
   if (hasRollout) {
     doc.addPage();
@@ -546,7 +546,7 @@ export async function generatePDF(
         doc.text(`[${t.system}]`, ML, y);
         doc.setTextColor(...C.dark);
         y = wrapText(doc, t.title, ML + 2, y + 5, CW - 4, 8.5, C.dark, "normal");
-        if (t.type || t.assignTo) y = wrapText(doc, `${t.type}${t.assignTo ? ` → ${t.assignTo}` : ""}`, ML + 2, y, CW - 4, 7.5, C.light, "italic");
+        if (t.type || t.assignTo) y = wrapText(doc, `${t.type}${t.assignTo ? ` -> ${t.assignTo}` : ""}`, ML + 2, y, CW - 4, 7.5, C.light, "italic");
         y += 3;
       });
       y += 4;
@@ -596,7 +596,7 @@ export async function generatePDF(
     }
 
     // Vendor outreach
-    if (vo && (vo.email || (vo.demoChecklist && vo.demoChecklist.length))) {
+    if (vo && (vo.howToReach || vo.email || (vo.demoChecklist && vo.demoChecklist.length))) {
       ensureRoom(40);
       y = sectionLabel(doc, "Vendor Outreach", y);
       if (vo.howToReach) { y = wrapText(doc, vo.howToReach, ML, y, CW, 8.5, C.dark, "normal"); y += 3; }
@@ -617,7 +617,7 @@ export async function generatePDF(
         doc.text("DEMO-CALL CHECKLIST", ML, y); y += 5;
         vo.demoChecklist.forEach((q) => {
           ensureRoom(10);
-          y = wrapText(doc, `☐  ${q}`, ML, y, CW, 8, C.dark, "normal");
+          y = wrapText(doc, `[ ]  ${q}`, ML, y, CW, 8, C.dark, "normal");
           y += 1.5;
         });
       }

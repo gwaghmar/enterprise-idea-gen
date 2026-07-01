@@ -522,7 +522,7 @@ export default function SolutionPage() {
         )}
 
         {/* Vendor Outreach Kit */}
-        {solution.vendorOutreach && (solution.vendorOutreach.email || solution.vendorOutreach.demoChecklist?.length) && (
+        {solution.vendorOutreach && (solution.vendorOutreach.howToReach || solution.vendorOutreach.email || solution.vendorOutreach.demoChecklist?.length) && (
           <div className="mb-12">
             <h2 className="text-xl font-semibold mb-1">Vendor Outreach Kit</h2>
             <p className="text-white/40 text-sm mb-4">How to reach the vendor and what to pin down before you buy.</p>
