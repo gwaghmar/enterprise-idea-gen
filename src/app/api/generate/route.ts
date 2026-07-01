@@ -58,11 +58,21 @@ export async function POST(req: NextRequest) {
     apiKey: process.env.OPENROUTER_API_KEY!,
   });
 
+  const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+
   const stream = new ReadableStream({
     async start(controller) {
+      // Activity trace — streamed live AND saved with the solution
+      const activityLog: { type: string; text: string; url?: string }[] = [];
+      const act = (entry: { type: string; text: string; url?: string }) => {
+        activityLog.push(entry);
+        send(controller, { activity: entry });
+      };
       try {
         // ── Step 1: Perplexity — targeted enterprise research ──────────────
         send(controller, { progress: 5, step: 1, message: "Searching for enterprise tools and case studies..." });
+        act({ type: "search", text: `Researching enterprise tools & case studies for "${problem.slice(0, 60)}${problem.length > 60 ? "…" : ""}"` });
+        act({ type: "search", text: `Scoping to ${industry} · ${size} · ${stack}` });
         const t1 = Date.now();
 
         const searchResult = await openrouter.chat.completions.create({
@@ -106,12 +116,19 @@ Be specific: name exact products, pricing tiers, integration methods, compliance
           message: citations.length > 0 ? `Found ${citations.length} sources` : "Research complete",
           citations, done: false,
         });
+        if (citations.length > 0) {
+          act({ type: "found", text: `Found ${citations.length} sources` });
+          citations.slice(0, 8).forEach((url) => act({ type: "source", text: hostOf(url), url }));
+        } else {
+          act({ type: "found", text: "No external citations — using research findings" });
+        }
 
         // ── Step 2: Jina — parallel source reading (skip if no citations) ──
         let sourceContent = "";
         if (citations.length > 0) {
           const topUrls = citations.slice(0, 4);
           send(controller, { progress: 35, step: 2, message: `Reading ${topUrls.length} sources in parallel...` });
+          topUrls.forEach((url) => act({ type: "read", text: `Reading ${hostOf(url)}`, url }));
           const t2 = Date.now();
 
           const jinaResults = await Promise.all(topUrls.map((url) => jinaFetch(url)));
@@ -122,12 +139,14 @@ Be specific: name exact products, pricing tiers, integration methods, compliance
 
           log(reqId, "jina_done", { ms: Date.now() - t2, sourcesRead: jinaResults.filter(Boolean).length });
           send(controller, { progress: 58, step: 2, message: `Read ${jinaResults.filter(Boolean).length} sources` });
+          act({ type: "read", text: `Read ${jinaResults.filter(Boolean).length} of ${topUrls.length} sources in full` });
         } else {
           send(controller, { progress: 58, step: 2, message: "Proceeding with research findings" });
         }
 
         // ── Step 3: Claude Sonnet — structured solution synthesis ──────────
         send(controller, { progress: 63, step: 3, message: "Claude synthesizing your solution..." });
+        act({ type: "synth", text: "Claude synthesizing your solution from the research" });
         const t3 = Date.now();
 
         const synthesisPrompt = `You are a senior enterprise solution architect with 20 years of experience at McKinsey and Gartner. Build a specific, opinionated solution — not a generic overview. You cover not just WHICH tools, but exactly HOW to get them approved and rolled out inside this specific company.
@@ -337,13 +356,14 @@ Node labels: 3-5 words MAX. Node IDs must be unique (p1_, p2_, p3_ prefixes).`;
         }
 
         const totalTokens = (searchResult.usage?.total_tokens ?? 0) + tokenCount;
+        act({ type: "done", text: "Solution assembled and ready" });
         log(reqId, "complete", { totalTokens, totalMs: Date.now() - t1 });
 
         send(controller, {
           progress: 100, step: 4, message: "Solution ready", done: true,
           solution, problem,
           context: { size, stack, budget, timeline, industry, team, seats, techLevel, compliance },
-          citations,
+          citations, activity: activityLog,
           model: "perplexity/sonar-pro → jina (parallel) → claude/sonnet-4-5",
           tokens: totalTokens,
         });

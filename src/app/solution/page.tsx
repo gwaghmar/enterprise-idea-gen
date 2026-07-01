@@ -169,12 +169,56 @@ function ROICalculator({ estimatedCost }: { estimatedCost: string }) {
   );
 }
 
+// ─── Activity Trace Modal ─────────────────────────────────────────────────────
+function ActivityModal({ activity, focusUrl, onClose }: {
+  activity: { type: string; text: string; url?: string }[]; focusUrl: string | null; onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+      <div className="relative bg-[#0d0d0d] border border-white/15 rounded-2xl p-6 max-w-lg w-full shadow-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <p className="text-white/40 text-xs uppercase tracking-wider mb-1">How AI built this</p>
+            <p className="text-white font-semibold">Research activity</p>
+          </div>
+          <button onClick={onClose} className="text-white/30 hover:text-white/70 ml-4 text-2xl leading-none">×</button>
+        </div>
+        <div className="overflow-y-auto space-y-2.5 pr-1">
+          {activity.map((a, i) => {
+            const icon = a.type === "search" ? "🔎" : a.type === "found" ? "✨" : a.type === "read" ? "📄" : a.type === "synth" ? "🧠" : a.type === "done" ? "✅" : "•";
+            const focused = focusUrl && a.url === focusUrl;
+            return (
+              <div key={i} className={`flex items-start gap-2.5 text-sm rounded-lg px-2 py-1.5 ${focused ? "bg-blue-500/15 border border-blue-500/30" : ""}`}>
+                {a.url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`https://www.google.com/s2/favicons?domain=${a.text}&sz=64`} alt="" width={16} height={16}
+                    className="w-4 h-4 rounded mt-0.5 shrink-0 bg-white/10"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                ) : (
+                  <span className="text-xs mt-0.5 shrink-0 w-4 text-center">{icon}</span>
+                )}
+                {a.url
+                  ? <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-blue-300/90 hover:text-blue-200 leading-snug break-all">{a.text}</a>
+                  : <span className="text-white/70 leading-snug">{a.text}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Solution Page ───────────────────────────────────────────────────────
 export default function SolutionPage() {
   const [solution, setSolution] = useState<Solution | null>(null);
   const [problem, setProblem] = useState("");
   const [context, setContext] = useState<Context | null>(null);
   const [citations, setCitations] = useState<string[]>([]);
+  const [activity, setActivity] = useState<{ type: string; text: string; url?: string }[]>([]);
+  const [activityFocus, setActivityFocus] = useState<string | null>(null);
+  const [showActivity, setShowActivity] = useState(false);
   const [model, setModel] = useState("");
   const [tokens, setTokens] = useState<number | null>(null);
   const [paying, setPaying] = useState(false);
@@ -217,6 +261,7 @@ export default function SolutionPage() {
     setProblem(data.problem);
     setContext(data.context ?? null);
     setCitations(data.citations ?? []);
+    setActivity(data.activity ?? []);
     setModel(data.model ?? "");
     setTokens(data.tokens ?? null);
   }, [router]);
@@ -280,6 +325,7 @@ export default function SolutionPage() {
   return (
     <div className="min-h-screen bg-black text-white">
       {selectedItem && <ExplainPopup item={selectedItem} solutionContext={solutionContext} onClose={() => setSelectedItem(null)} />}
+      {showActivity && <ActivityModal activity={activity} focusUrl={activityFocus} onClose={() => { setShowActivity(false); setActivityFocus(null); }} />}
 
       {/* Floating "Ask AI" button on text selection */}
       {askBtn && (
@@ -722,11 +768,18 @@ export default function SolutionPage() {
         <div className="mb-12 bg-white/3 border border-white/10 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-white/40">How AI built this</h2>
-            {citations.length > 0 && (
-              <button onClick={() => setShowSources(!showSources)} className="text-xs text-white/40 hover:text-white/70 transition-colors">
-                {showSources ? "Hide" : "Show"} {citations.length} sources
-              </button>
-            )}
+            <div className="flex items-center gap-4">
+              {activity.length > 0 && (
+                <button onClick={() => { setActivityFocus(null); setShowActivity(true); }} className="text-xs text-white/40 hover:text-white/70 transition-colors">
+                  View activity
+                </button>
+              )}
+              {citations.length > 0 && (
+                <button onClick={() => setShowSources(!showSources)} className="text-xs text-white/40 hover:text-white/70 transition-colors">
+                  {showSources ? "Hide" : "Show"} {citations.length} sources
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap gap-4 text-sm text-white/50 mb-3">
             {model && <span>Pipeline: <span className="text-white/70">{model}</span></span>}
@@ -737,9 +790,11 @@ export default function SolutionPage() {
               {citations.map((url, i) => {
                 let host = url;
                 try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep raw */ }
+                const openTrace = () => { setActivityFocus(url); setShowActivity(true); };
                 return (
-                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                    className="group flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 hover:border-white/25 hover:bg-white/8 transition-all">
+                  <div key={i}
+                    onClick={activity.length > 0 ? openTrace : undefined}
+                    className={`group flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 hover:border-white/25 hover:bg-white/8 transition-all ${activity.length > 0 ? "cursor-pointer" : ""}`}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={`https://www.google.com/s2/favicons?domain=${host}&sz=64`} alt="" width={20} height={20}
                       className="w-5 h-5 rounded shrink-0 bg-white/10"
@@ -748,8 +803,10 @@ export default function SolutionPage() {
                       <p className="text-sm text-white/80 group-hover:text-white truncate">{host}</p>
                       <p className="text-xs text-white/35 truncate">{url.replace(/^https?:\/\//, "")}</p>
                     </div>
-                    <span className="ml-auto text-white/20 group-hover:text-white/50 transition-colors shrink-0">↗</span>
-                  </a>
+                    {activity.length > 0 && <span className="ml-auto text-white/25 group-hover:text-white/60 text-xs transition-colors shrink-0">trace</span>}
+                    <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                      className="text-white/20 group-hover:text-white/50 transition-colors shrink-0" title="Open source">↗</a>
+                  </div>
                 );
               })}
             </div>

@@ -256,6 +256,7 @@ export default function Home() {
   const [currentStep, setCurrentStep] = useState(0);
   const [stepMessage, setStepMessage] = useState("");
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [activityFeed, setActivityFeed] = useState<{ type: string; text: string; url?: string }[]>([]);
   const [error, setError] = useState("");
   const router = useRouter();
 
@@ -297,6 +298,7 @@ export default function Home() {
     setProgress(1);
     setCurrentStep(1);
     setCompletedSteps([]);
+    setActivityFeed([]);
     setStepMessage("Starting...");
     setError("");
 
@@ -339,6 +341,7 @@ export default function Home() {
           try {
             const data = JSON.parse(line.slice(6));
 
+            if (data.activity) { setActivityFeed((prev) => [...prev, data.activity]); continue; }
             setProgress(data.progress ?? 0);
             if (data.message) setStepMessage(data.message);
             if (data.step) {
@@ -378,8 +381,9 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center px-4">
-        <div className="max-w-sm w-full text-center space-y-10">
+      <div className="min-h-screen bg-black flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-3xl grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+        <div className="w-full max-w-sm mx-auto text-center space-y-10">
           <ProgressRing progress={progress} />
 
           <div className="space-y-1">
@@ -418,6 +422,42 @@ export default function Home() {
               );
             })}
           </div>
+        </div>
+
+        {/* Live activity feed */}
+        <div className="w-full">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-white/40 text-xs uppercase tracking-wider">Activity</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          </div>
+          <div className="bg-white/3 border border-white/10 rounded-2xl p-4 h-72 overflow-hidden relative">
+            <div className="space-y-2.5 overflow-y-auto h-full pr-1 flex flex-col-reverse">
+              <div className="space-y-2.5">
+                {activityFeed.length === 0 && (
+                  <p className="text-white/25 text-sm">Waiting for the first step…</p>
+                )}
+                {activityFeed.map((a, i) => {
+                  const icon = a.type === "search" ? "🔎" : a.type === "found" ? "✨"
+                    : a.type === "read" ? "📄" : a.type === "synth" ? "🧠" : a.type === "done" ? "✅" : "•";
+                  return (
+                    <div key={i} className="flex items-start gap-2.5 text-sm animate-in fade-in slide-in-from-bottom-1">
+                      {a.url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={`https://www.google.com/s2/favicons?domain=${a.text}&sz=64`} alt="" width={16} height={16}
+                          className="w-4 h-4 rounded mt-0.5 shrink-0 bg-white/10"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                      ) : (
+                        <span className="text-xs mt-0.5 shrink-0 w-4 text-center">{icon}</span>
+                      )}
+                      <span className={`${a.url ? "text-blue-300/80" : "text-white/60"} leading-snug`}>{a.text}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[#0a0a0a] to-transparent pointer-events-none rounded-b-2xl" />
+          </div>
+        </div>
         </div>
       </div>
     );
