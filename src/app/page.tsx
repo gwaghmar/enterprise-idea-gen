@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Sparkles, FileText, Brain, CheckCircle2, Circle, Check } from "lucide-react";
+import { Search, Sparkles, FileText, Brain, CheckCircle2, Circle, Check, History } from "lucide-react";
+import { newSid, saveToHistory, listHistory } from "@/lib/history";
 
 const ACTIVITY_ICONS: Record<string, typeof Search> = {
   search: Search, found: Sparkles, read: FileText, synth: Brain, done: CheckCircle2,
@@ -272,7 +273,10 @@ export default function Home() {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [activityFeed, setActivityFeed] = useState<{ type: string; text: string; url?: string }[]>([]);
   const [error, setError] = useState("");
+  const [hasHistory, setHasHistory] = useState(false);
   const router = useRouter();
+
+  useEffect(() => { setHasHistory(listHistory().length > 0); }, []);
 
   function toggleStack(v: string) {
     // "Recommend for me" is exclusive — selecting it clears everything else
@@ -355,7 +359,9 @@ export default function Home() {
           try {
             const data = JSON.parse(line.slice(6));
 
-            if (data.activity) { setActivityFeed((prev) => [...prev, data.activity]); continue; }
+            // Live feed events are {activity: {...}}; the final done payload also
+            // carries the full trace as {activity: [...]} — don't swallow that one.
+            if (data.activity && !data.done) { setActivityFeed((prev) => [...prev, data.activity]); continue; }
             setProgress(data.progress ?? 0);
             if (data.message) setStepMessage(data.message);
             if (data.step) {
@@ -377,8 +383,29 @@ export default function Home() {
                 setProgress(100);
                 setCompletedSteps([1, 2, 3, 4]);
                 setStepMessage("Solution ready!");
+
+                // Persist: local history always; Blob mirror when configured
+                const sid = newSid();
+                const payload = { ...data, sid };
+                let shareId: string | undefined;
+                try {
+                  const saveRes = await fetch("/api/share", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                  });
+                  if (saveRes.ok) shareId = (await saveRes.json()).id;
+                } catch { /* blob not configured — local cache still works */ }
+                saveToHistory({
+                  sid,
+                  title: data.solution?.title ?? "Untitled solution",
+                  problem: (data.problem ?? "").slice(0, 140),
+                  date: new Date().toISOString(),
+                  shareId,
+                }, payload);
+
                 await new Promise((r) => setTimeout(r, 600));
-                sessionStorage.setItem("solution", JSON.stringify(data));
+                sessionStorage.setItem("solution", JSON.stringify(payload));
                 router.push("/solution");
               }
             }
@@ -477,6 +504,13 @@ export default function Home() {
     <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-4 py-16">
       <div className="max-w-2xl w-full">
         <div className="mb-10 text-center">
+          {hasHistory && (
+            <div className="flex justify-end mb-2">
+              <a href="/history" className="flex items-center gap-1.5 text-sm text-white/40 hover:text-white/70 transition-colors">
+                <History className="w-4 h-4" /> My solutions
+              </a>
+            </div>
+          )}
           <div className="inline-block bg-white/10 border border-white/20 rounded-full px-4 py-1 text-sm mb-6 text-white/60">
             Enterprise Solution Generator
           </div>
