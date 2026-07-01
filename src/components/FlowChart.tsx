@@ -9,6 +9,7 @@ import ReactFlow, {
   MarkerType,
   useNodesState,
   useEdgesState,
+  ReactFlowProvider,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import Dagre from "@dagrejs/dagre";
@@ -84,7 +85,7 @@ function buildDagreLayout(nodes: FlowNode[], edges: FlowEdge[]): Node[] {
   });
 }
 
-export default function FlowChart({ nodes, edges }: Props) {
+function FlowChartInner({ nodes, edges }: Props) {
   const rfNodes = buildDagreLayout(nodes, edges);
   const rfEdges: Edge[] = edges.map((e, i) => ({
     id: `e${i}`,
@@ -123,5 +124,13 @@ export default function FlowChart({ nodes, edges }: Props) {
       />
       <Controls style={{ background: "#fff", border: "1px solid #E0E0E0", boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }} />
     </ReactFlow>
+  );
+}
+
+export default function FlowChart({ nodes, edges }: Props) {
+  return (
+    <ReactFlowProvider>
+      <FlowChartInner nodes={nodes} edges={edges} />
+    </ReactFlowProvider>
   );
 }
