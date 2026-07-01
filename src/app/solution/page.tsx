@@ -3,6 +3,18 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import {
+  Search, Sparkles, FileText, Brain, CheckCircle2, Circle,
+  Lightbulb, Target, Clock, ArrowRight, ArrowUpRight, ArrowLeft, AlertTriangle, Square, Wand2,
+} from "lucide-react";
+
+const ACTIVITY_ICONS: Record<string, typeof Search> = {
+  search: Search, found: Sparkles, read: FileText, synth: Brain, done: CheckCircle2,
+};
+function ActivityIcon({ type, className }: { type: string; className?: string }) {
+  const Icon = ACTIVITY_ICONS[type] ?? Circle;
+  return <Icon className={className} strokeWidth={2} />;
+}
 
 const FlowChart = dynamic(() => import("@/components/FlowChart"), { ssr: false });
 
@@ -127,7 +139,7 @@ function ExplainPopup({ item, solutionContext, fullSolution, onEdit, onClose }: 
             <button onClick={() => { setMode("explaining"); streamExplain(); }} className="w-full bg-white text-black font-semibold rounded-xl py-3 text-sm hover:bg-white/90 transition-all">Explain this to me</button>
             <button onClick={() => setMode("asking")} className="w-full bg-white/8 border border-white/15 text-white font-medium rounded-xl py-3 text-sm hover:bg-white/12 transition-all">I have a question</button>
             <button onClick={() => setMode("editing")} className="w-full bg-white/8 border border-white/15 text-white font-medium rounded-xl py-3 text-sm hover:bg-white/12 transition-all flex items-center justify-center gap-2">
-              <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4"><path d="M12 2l1.6 4.9L18.5 8.5 14 11.8 15.2 17 12 14l-3.2 3 1.2-5.2L5.5 8.5l4.9-1.6L12 2z" fill="currentColor"/></svg>
+              <Wand2 className="w-4 h-4" />
               Change this with AI
             </button>
           </div>
@@ -135,7 +147,7 @@ function ExplainPopup({ item, solutionContext, fullSolution, onEdit, onClose }: 
         {mode === "editing" && (
           <div className="mt-2 space-y-3">
             {editDone ? (
-              <div className="flex items-center gap-2 text-emerald-400 text-sm py-3"><span>✓</span> Applied — updating your solution…</div>
+              <div className="flex items-center gap-2 text-emerald-400 text-sm py-3"><CheckCircle2 className="w-4 h-4" /> Applied — updating your solution…</div>
             ) : (
               <>
                 <p className="text-white/50 text-xs">Describe the change — e.g. &ldquo;swap this for a cheaper tool&rdquo;, &ldquo;add a fourth phase&rdquo;, &ldquo;cut the cost estimate in half&rdquo;.</p>
@@ -237,7 +249,6 @@ function ActivityModal({ activity, focusUrl, onClose }: {
         </div>
         <div className="overflow-y-auto space-y-2.5 pr-1">
           {activity.map((a, i) => {
-            const icon = a.type === "search" ? "🔎" : a.type === "found" ? "✨" : a.type === "read" ? "📄" : a.type === "synth" ? "🧠" : a.type === "done" ? "✅" : "•";
             const focused = focusUrl && a.url === focusUrl;
             return (
               <div key={i} className={`flex items-start gap-2.5 text-sm rounded-lg px-2 py-1.5 ${focused ? "bg-blue-500/15 border border-blue-500/30" : ""}`}>
@@ -247,7 +258,7 @@ function ActivityModal({ activity, focusUrl, onClose }: {
                     className="w-4 h-4 rounded mt-0.5 shrink-0 bg-white/10"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
                 ) : (
-                  <span className="text-xs mt-0.5 shrink-0 w-4 text-center">{icon}</span>
+                  <ActivityIcon type={a.type} className="w-4 h-4 mt-0.5 shrink-0 text-white/45" />
                 )}
                 {a.url
                   ? <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-blue-300/90 hover:text-blue-200 leading-snug break-all">{a.text}</a>
@@ -393,7 +404,7 @@ export default function SolutionPage() {
           style={{ position: "absolute", top: askBtn.top, left: askBtn.left, transform: "translateX(-50%)" }}
           className="z-40 flex items-center gap-1.5 bg-white text-black text-xs font-semibold rounded-full px-3 py-1.5 shadow-xl shadow-black/40 hover:bg-white/90 transition-all animate-in fade-in"
         >
-          <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5"><path d="M12 2l1.9 5.8L20 9.7l-5.1 3.7L16 20l-4-3.5L8 20l1.1-6.6L4 9.7l6.1-1.9L12 2z" fill="currentColor"/></svg>
+          <Sparkles className="w-3.5 h-3.5" />
           Ask AI
         </button>
       )}
@@ -402,7 +413,7 @@ export default function SolutionPage() {
 
         {/* Top nav */}
         <div className="flex items-center justify-between mb-8">
-          <a href="/" className="text-white/40 text-sm hover:text-white/70 transition-colors">← New solution</a>
+          <a href="/" className="text-white/40 text-sm hover:text-white/70 transition-colors flex items-center gap-1.5"><ArrowLeft className="w-4 h-4" /> New solution</a>
           <div className="flex gap-2">
             <button onClick={handleShare} disabled={sharing}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm border border-white/15 text-white/60 hover:text-white hover:border-white/30 disabled:opacity-50 transition-all">
@@ -436,7 +447,7 @@ export default function SolutionPage() {
         <h1 className="text-4xl font-bold mb-4">{solution.title}</h1>
         {solution.insight && (
           <div className="flex gap-3 bg-white/5 border border-white/15 rounded-xl px-5 py-4 mb-6 max-w-3xl">
-            <span className="text-white/40 text-lg shrink-0">💡</span>
+            <Lightbulb className="w-5 h-5 text-yellow-400/70 shrink-0" />
             <p className="text-white/80 text-sm leading-relaxed italic">{solution.insight}</p>
           </div>
         )}
@@ -511,7 +522,7 @@ export default function SolutionPage() {
                   <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Hidden costs to budget for</p>
                   <ul className="space-y-1">
                     {solution.tco.hiddenCosts.map((c, i) => (
-                      <li key={i} className="flex gap-2 text-sm text-white/60"><span className="text-yellow-500/70 shrink-0">⚠</span><span>{c}</span></li>
+                      <li key={i} className="flex gap-2 text-sm text-white/60"><AlertTriangle className="w-4 h-4 text-yellow-500/70 shrink-0 mt-0.5" /><span>{c}</span></li>
                     ))}
                   </ul>
                 </div>
@@ -541,7 +552,7 @@ export default function SolutionPage() {
                         <p className="text-white/70 text-sm">{tool.whyForYou}</p>
                       </div>
                     )}
-                    <p className="text-xs text-white/25 group-hover:text-white/50 transition-colors pt-1">Click to learn more →</p>
+                    <p className="text-xs text-white/25 group-hover:text-white/50 transition-colors pt-1 flex items-center gap-1">Click to learn more <ArrowRight className="w-3 h-3" /></p>
                   </button>
                   {/* Vendor questions toggle */}
                   {tool.vendorQuestions && tool.vendorQuestions.length > 0 && (
@@ -649,10 +660,10 @@ export default function SolutionPage() {
                   <p className="text-white font-medium text-sm mb-2">{k.metric}</p>
                   <div className="flex items-center gap-2 text-sm">
                     {k.baseline && <span className="text-white/40 line-through">{k.baseline}</span>}
-                    {k.baseline && <span className="text-white/30">→</span>}
+                    {k.baseline && <ArrowRight className="w-3.5 h-3.5 text-white/30 shrink-0" />}
                     <span className="text-emerald-400 font-semibold">{k.target}</span>
                   </div>
-                  {k.timeframe && <p className="text-white/35 text-xs mt-2">🎯 {k.timeframe}</p>}
+                  {k.timeframe && <p className="text-white/35 text-xs mt-2 flex items-center gap-1.5"><Target className="w-3.5 h-3.5" /> {k.timeframe}</p>}
                 </div>
               ))}
             </div>
@@ -696,7 +707,7 @@ export default function SolutionPage() {
                           {s.team && <span className="text-xs px-2 py-0.5 rounded-full border border-white/20 text-white/50 shrink-0">{s.team}</span>}
                         </div>
                         <p className="text-white/60 text-sm">{s.responsibility}</p>
-                        {s.whenToContact && <p className="text-white/35 text-xs mt-2">⏱ {s.whenToContact}</p>}
+                        {s.whenToContact && <p className="text-white/35 text-xs mt-2 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {s.whenToContact}</p>}
                       </div>
                     ))}
                   </div>
@@ -712,7 +723,7 @@ export default function SolutionPage() {
                         <span className="text-xs px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0 mt-0.5">{t.system}</span>
                         <div className="min-w-0">
                           <p className="text-white text-sm font-medium">{t.title}</p>
-                          <p className="text-white/45 text-xs mt-0.5">{t.type}{t.assignTo ? ` · → ${t.assignTo}` : ""}</p>
+                          <p className="text-white/45 text-xs mt-0.5 flex items-center gap-1">{t.type}{t.assignTo && <><span className="text-white/25">·</span><ArrowRight className="w-3 h-3" />{t.assignTo}</>}</p>
                         </div>
                       </div>
                     ))}
@@ -813,7 +824,7 @@ export default function SolutionPage() {
                 <ul className="space-y-2">
                   {solution.vendorOutreach.demoChecklist.map((q, i) => (
                     <li key={i} className="flex gap-2 text-sm text-white/60">
-                      <span className="text-white/25 shrink-0">☐</span><span>{q}</span>
+                      <Square className="w-3.5 h-3.5 text-white/25 shrink-0 mt-0.5" /><span>{q}</span>
                     </li>
                   ))}
                 </ul>
@@ -863,7 +874,7 @@ export default function SolutionPage() {
                     </div>
                     {activity.length > 0 && <span className="ml-auto text-white/25 group-hover:text-white/60 text-xs transition-colors shrink-0">trace</span>}
                     <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
-                      className="text-white/20 group-hover:text-white/50 transition-colors shrink-0" title="Open source">↗</a>
+                      className="text-white/20 group-hover:text-white/50 transition-colors shrink-0" title="Open source"><ArrowUpRight className="w-4 h-4" /></a>
                   </div>
                 );
               })}

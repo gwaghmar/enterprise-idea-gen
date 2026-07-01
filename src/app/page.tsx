@@ -2,6 +2,15 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Search, Sparkles, FileText, Brain, CheckCircle2, Circle, Check } from "lucide-react";
+
+const ACTIVITY_ICONS: Record<string, typeof Search> = {
+  search: Search, found: Sparkles, read: FileText, synth: Brain, done: CheckCircle2,
+};
+function ActivityIcon({ type, className }: { type: string; className?: string }) {
+  const Icon = ACTIVITY_ICONS[type] ?? Circle;
+  return <Icon className={className} strokeWidth={2} />;
+}
 
 const SIZES = ["Startup", "SMB", "Enterprise"];
 const STACKS = [
@@ -405,7 +414,7 @@ export default function Home() {
                     active ? "border-2 border-white animate-pulse" :
                     "border border-white/30"
                   }`}>
-                    {done ? "✓" : step}
+                    {done ? <Check className="w-3 h-3" strokeWidth={3} /> : step}
                   </span>
                   <span className={`text-sm ${active ? "text-white font-medium" : "text-white/60"}`}>
                     {label}
@@ -436,23 +445,19 @@ export default function Home() {
                 {activityFeed.length === 0 && (
                   <p className="text-white/25 text-sm">Waiting for the first step…</p>
                 )}
-                {activityFeed.map((a, i) => {
-                  const icon = a.type === "search" ? "🔎" : a.type === "found" ? "✨"
-                    : a.type === "read" ? "📄" : a.type === "synth" ? "🧠" : a.type === "done" ? "✅" : "•";
-                  return (
-                    <div key={i} className="flex items-start gap-2.5 text-sm animate-in fade-in slide-in-from-bottom-1">
-                      {a.url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`https://www.google.com/s2/favicons?domain=${a.text}&sz=64`} alt="" width={16} height={16}
-                          className="w-4 h-4 rounded mt-0.5 shrink-0 bg-white/10"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
-                      ) : (
-                        <span className="text-xs mt-0.5 shrink-0 w-4 text-center">{icon}</span>
-                      )}
-                      <span className={`${a.url ? "text-blue-300/80" : "text-white/60"} leading-snug`}>{a.text}</span>
-                    </div>
-                  );
-                })}
+                {activityFeed.map((a, i) => (
+                  <div key={i} className="flex items-start gap-2.5 text-sm animate-in fade-in slide-in-from-bottom-1">
+                    {a.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={`https://www.google.com/s2/favicons?domain=${a.text}&sz=64`} alt="" width={16} height={16}
+                        className="w-4 h-4 rounded mt-0.5 shrink-0 bg-white/10"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+                    ) : (
+                      <ActivityIcon type={a.type} className="w-4 h-4 mt-0.5 shrink-0 text-white/45" />
+                    )}
+                    <span className={`${a.url ? "text-blue-300/80" : "text-white/60"} leading-snug`}>{a.text}</span>
+                  </div>
+                ))}
               </div>
             </div>
             <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[#0a0a0a] to-transparent pointer-events-none rounded-b-2xl" />
