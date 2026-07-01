@@ -9,7 +9,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Problem is required" }, { status: 400 });
   }
 
-  const origin = req.headers.get("origin") || "http://localhost:3000";
+  const host = req.headers.get("host") || "localhost:3000";
+  const proto = host.startsWith("localhost") ? "http" : "https";
+  const origin = req.headers.get("origin") || `${proto}://${host}`;
 
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],

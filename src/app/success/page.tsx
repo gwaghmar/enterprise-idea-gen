@@ -1,4 +1,12 @@
+"use client";
+
+import { useEffect } from "react";
+
 export default function SuccessPage() {
+  useEffect(() => {
+    sessionStorage.removeItem("solution");
+  }, []);
+
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
       <div className="max-w-md text-center">
