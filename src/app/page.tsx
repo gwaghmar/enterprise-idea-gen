@@ -12,6 +12,11 @@ function ActivityIcon({ type, className }: { type: string; className?: string })
   return <Icon className={className} strokeWidth={2} />;
 }
 
+// Favicon lookups need a bare hostname — activity text can be a phrase like "Reading workato.com"
+function faviconDomain(url: string): string {
+  try { return new URL(url).hostname; } catch { return url; }
+}
+
 const SIZES = ["Startup", "SMB", "Enterprise"];
 const STACKS = [
   "Google Workspace",
@@ -272,7 +277,7 @@ export default function Home() {
   function toggleStack(v: string) {
     // "Recommend for me" is exclusive — selecting it clears everything else
     if (v === "Recommend for me") {
-      setStacks(stacks.includes(v) ? [] : ["Recommend for me"]);
+      setStacks((prev) => (prev.includes(v) ? [] : ["Recommend for me"]));
       return;
     }
     // Any other selection clears "Recommend for me"
@@ -284,7 +289,7 @@ export default function Home() {
 
   function toggleCompliance(v: string) {
     if (v === "None / Not sure") {
-      setCompliance(compliance.includes(v) ? [] : ["None / Not sure"]);
+      setCompliance((prev) => (prev.includes(v) ? [] : ["None / Not sure"]));
       return;
     }
     setCompliance((prev) => {
@@ -449,7 +454,7 @@ export default function Home() {
                   <div key={i} className="flex items-start gap-2.5 text-sm animate-in fade-in slide-in-from-bottom-1">
                     {a.url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`https://www.google.com/s2/favicons?domain=${a.text}&sz=64`} alt="" width={16} height={16}
+                      <img src={`https://www.google.com/s2/favicons?domain=${faviconDomain(a.url)}&sz=64`} alt="" width={16} height={16}
                         className="w-4 h-4 rounded mt-0.5 shrink-0 bg-white/10"
                         onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
                     ) : (
