@@ -420,6 +420,16 @@ export default function Home() {
 
   useEffect(() => { setHasHistory(listHistory().length > 0); }, []);
 
+  // Desktop/Android notification when the report finishes while the tab is
+  // in the background (generation takes a minute — people switch tabs)
+  function notifyIfHidden(title: string, body: string) {
+    try {
+      if (!document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;
+      const n = new Notification(title, { body, icon: "/favicon.ico" });
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch { /* notifications unavailable */ }
+  }
+
   function toggleStack(v: string) {
     // "Recommend for me" is exclusive — selecting it clears everything else
     if (v === "Recommend for me") {
@@ -466,6 +476,14 @@ export default function Home() {
     setStepMessage("Starting...");
     setError("");
 
+    // Ask for notification permission on the submit gesture (browsers require
+    // a user action) so we can ping them when the report is ready
+    try {
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+    } catch { /* unavailable */ }
+
     const context = {
       problem: problem.trim(),
       size,
@@ -491,6 +509,7 @@ export default function Home() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let gotDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -522,13 +541,16 @@ export default function Home() {
             }
 
             if (data.done) {
+              gotDone = true;
               if (data.error) {
                 setError(data.error);
                 setLoading(false);
+                notifyIfHidden("Generation failed", "Something went wrong — come back and try again.");
               } else {
                 setProgress(100);
                 setCompletedSteps([1, 2, 3, 4]);
                 setStepMessage("Solution ready!");
+                notifyIfHidden("Your solution is ready 🎉", data.solution?.title ?? "Open the tab to view your report.");
 
                 // Persist: local history always; Blob mirror when configured
                 const sid = newSid();
@@ -561,6 +583,14 @@ export default function Home() {
             // skip malformed chunk
           }
         }
+      }
+
+      // Stream ended without a done event (server timeout / dropped
+      // connection) — without this the loading screen hung forever
+      if (!gotDone) {
+        setError("The report took too long or the connection dropped. Please try again — it usually works on a second run.");
+        setLoading(false);
+        notifyIfHidden("Generation didn't finish", "The report timed out — come back and try again.");
       }
     } catch {
       setError("Failed to generate. Try again.");
@@ -662,7 +692,7 @@ export default function Home() {
           <div className="inline-block bg-white/10 border border-white/20 rounded-full px-4 py-1 text-sm mb-6 text-white/60">
             Enterprise Solution Generator
           </div>
-          <h1 className="text-5xl font-bold tracking-tight mb-4">
+          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
             Describe your problem.<br />
             <span className="text-white/40">Get a full solution.</span>
           </h1>
