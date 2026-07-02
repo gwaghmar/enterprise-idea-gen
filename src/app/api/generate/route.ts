@@ -14,7 +14,7 @@ async function jinaFetch(url: string): Promise<string> {
       headers: { Accept: "text/plain" },
       signal: AbortSignal.timeout(5000),
     });
-    return (await res.text()).slice(0, 4500);
+    return (await res.text()).slice(0, 3500);
   } catch {
     return "";
   }
@@ -24,7 +24,9 @@ function log(reqId: string, step: string, data: Record<string, unknown>) {
   console.log(JSON.stringify({ reqId, step, ts: new Date().toISOString(), ...data }));
 }
 
-export const maxDuration = 120;
+// Real runs hit the old 120s cap: Perplexity alone can take 30s+ and the
+// synthesis streams ~5k tokens — the function was killed mid-report
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   const reqId = Math.random().toString(36).slice(2, 9);
@@ -101,9 +103,10 @@ Find and compare:
 5. Any open-source or lower-cost alternatives if budget is tight
 6. Procurement, security-review, and IT-onboarding requirements typical for tools like these (SSO/SAML, data residency, SOC2/DPA, CASB allow-listing such as Netskope, IP allow-listing)
 
-Be specific: name exact products, pricing tiers, integration methods, compliance posture, and implementation timeframes.`,
+Be specific and concise: name exact products, pricing tiers, integration methods, compliance posture, and implementation timeframes.`,
           }],
           temperature: 0.2,
+          max_tokens: 1200,
         });
 
         const searchContent = searchResult.choices[0].message.content || "";
@@ -126,7 +129,7 @@ Be specific: name exact products, pricing tiers, integration methods, compliance
         // ── Step 2: Jina — parallel source reading (skip if no citations) ──
         let sourceContent = "";
         if (citations.length > 0) {
-          const topUrls = citations.slice(0, 4);
+          const topUrls = citations.slice(0, 3);
           send(controller, { progress: 35, step: 2, message: `Reading ${topUrls.length} sources in parallel...` });
           topUrls.forEach((url) => act({ type: "read", text: `Reading ${hostOf(url)}`, url }));
           const t2 = Date.now();

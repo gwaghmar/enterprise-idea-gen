@@ -238,7 +238,7 @@ function ROICalculator({ estimatedCost }: { estimatedCost: string }) {
   return (
     <div className="bg-white/3 border border-white/10 rounded-2xl p-5">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-white/40 mb-4">ROI Calculator</h2>
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         {[
           { label: "Hours/week lost to this problem", value: hours, set: setHours, placeholder: "e.g. 10" },
           { label: "Team members affected", value: team, set: setTeam, placeholder: "e.g. 5" },
@@ -252,7 +252,7 @@ function ROICalculator({ estimatedCost }: { estimatedCost: string }) {
         ))}
       </div>
       {hasResult && (
-        <div className="grid grid-cols-3 gap-3 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
           {[
             { label: "Monthly problem cost", value: `$${Math.round(monthly).toLocaleString()}`, sub: "team × hours × rate" },
             { label: "Monthly savings", value: savings > 0 ? `$${Math.round(savings).toLocaleString()}` : "—", sub: "after solution cost", highlight: savings > 0 },
@@ -371,6 +371,7 @@ export default function SolutionPage() {
     setActivity(data.activity ?? []);
     setSid(data.sid ?? null);
     setUnlocked(Boolean(data.paid) || isPaid(data.sid));
+    if (data.solution?.title) document.title = `${data.solution.title} — ERPHigh`;
     setModel(data.model ?? "");
     setTokens(data.tokens ?? null);
   }, [router]);
@@ -461,7 +462,7 @@ export default function SolutionPage() {
       <div ref={contentRef} className="max-w-5xl mx-auto px-6 py-12">
 
         {/* Top nav */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-y-3 mb-8">
           <div className="flex items-center gap-5">
             <a href="/" className="text-white/40 text-sm hover:text-white/70 transition-colors flex items-center gap-1.5"><ArrowLeft className="w-4 h-4" /> New solution</a>
             <a href="/history" className="text-white/40 text-sm hover:text-white/70 transition-colors flex items-center gap-1.5"><History className="w-4 h-4" /> My solutions</a>
@@ -497,7 +498,7 @@ export default function SolutionPage() {
         </div>
 
         {/* Title + insight + summary */}
-        <h1 className="text-4xl font-bold mb-4">{solution.title}</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold mb-4">{solution.title}</h1>
         {solution.insight && (
           <div className="flex gap-3 bg-white/5 border border-white/15 rounded-xl px-5 py-4 mb-6 max-w-3xl">
             <Lightbulb className="w-5 h-5 text-yellow-400/70 shrink-0" />
@@ -568,8 +569,8 @@ export default function SolutionPage() {
             <p className="text-white/40 text-sm mb-4">The real number — setup, recurring, and the costs most teams forget.</p>
             <div className="bg-white/3 border border-white/10 rounded-2xl p-5">
               {solution.tco.lineItems && solution.tco.lineItems.length > 0 && (
-                <div className="overflow-hidden rounded-xl border border-white/10 mb-5">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto rounded-xl border border-white/10 mb-5">
+                  <table className="w-full min-w-[420px] text-sm">
                     <thead>
                       <tr className="bg-white/5 text-white/40 text-xs uppercase tracking-wider">
                         <th className="text-left font-medium px-4 py-2.5">Item</th>
@@ -918,7 +919,7 @@ export default function SolutionPage() {
                     </button>
                   </div>
                 </div>
-                <pre className="text-white/70 text-sm whitespace-pre-wrap font-sans leading-relaxed">{solution.vendorOutreach.email}</pre>
+                <pre className="text-white/70 text-sm whitespace-pre-wrap break-words font-sans leading-relaxed">{solution.vendorOutreach.email}</pre>
               </div>
             )}
 
