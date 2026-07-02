@@ -2,9 +2,10 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Sparkles, FileText, Brain, CheckCircle2, Circle, Check, History } from "lucide-react";
+import { Search, Sparkles, FileText, Brain, CheckCircle2, Circle, Check, History, Lightbulb } from "lucide-react";
 import { newSid, saveToHistory, listHistory } from "@/lib/history";
 import { FREE_MODE } from "@/lib/config";
+import { LOADING_FACTS, quipFor, type ErrorKind } from "@/lib/quips";
 
 const ACTIVITY_ICONS: Record<string, typeof Search> = {
   search: Search, found: Sparkles, read: FileText, synth: Brain, done: CheckCircle2,
@@ -416,8 +417,24 @@ export default function Home() {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [activityFeed, setActivityFeed] = useState<{ type: string; text: string; url?: string }[]>([]);
   const [error, setError] = useState("");
+  const [errorQuip, setErrorQuip] = useState("");
+  const [factIdx, setFactIdx] = useState(0);
   const [hasHistory, setHasHistory] = useState(false);
   const router = useRouter();
+
+  function showError(message: string, kind: ErrorKind) {
+    setError(message);
+    setErrorQuip(quipFor(kind));
+    setLoading(false);
+  }
+
+  // Rotate "did you know" facts on the loading screen
+  useEffect(() => {
+    if (!loading) return;
+    setFactIdx(Math.floor(Math.random() * LOADING_FACTS.length));
+    const t = setInterval(() => setFactIdx((i) => i + 1), 6000);
+    return () => clearInterval(t);
+  }, [loading]);
 
   useEffect(() => { setHasHistory(listHistory().length > 0); }, []);
 
@@ -476,6 +493,7 @@ export default function Home() {
     setActivityFeed([]);
     setStepMessage("Starting...");
     setError("");
+    setErrorQuip("");
 
     // Ask for notification permission on the submit gesture (browsers require
     // a user action) so we can ping them when the report is ready
@@ -507,8 +525,7 @@ export default function Home() {
 
       if (res.status === 429) {
         const j = await res.json().catch(() => ({}));
-        setError(j.error ?? "You've hit the hourly limit — try again in a bit.");
-        setLoading(false);
+        showError(j.error ?? "You've hit the hourly limit — try again in a bit.", "ratelimit");
         return;
       }
       if (!res.ok || !res.body) throw new Error("Request failed");
@@ -550,8 +567,7 @@ export default function Home() {
             if (data.done) {
               gotDone = true;
               if (data.error) {
-                setError(data.error);
-                setLoading(false);
+                showError(data.error, "ai");
                 notifyIfHidden("Generation failed", "Something went wrong — come back and try again.");
               } else {
                 setProgress(100);
@@ -595,13 +611,11 @@ export default function Home() {
       // Stream ended without a done event (server timeout / dropped
       // connection) — without this the loading screen hung forever
       if (!gotDone) {
-        setError("The report took too long or the connection dropped. Please try again — it usually works on a second run.");
-        setLoading(false);
+        showError("The report took too long or the connection dropped. Please try again — it usually works on a second run.", "timeout");
         notifyIfHidden("Generation didn't finish", "The report timed out — come back and try again.");
       }
     } catch {
-      setError("Failed to generate. Try again.");
-      setLoading(false);
+      showError("Couldn't reach the server. Check your connection and try again.", "network");
     }
   }
 
@@ -647,6 +661,14 @@ export default function Home() {
                 </div>
               );
             })}
+          </div>
+
+          {/* Rotating fact to keep the wait interesting */}
+          <div data-fact className="bg-white/3 border border-white/10 rounded-xl px-4 py-3 text-left flex gap-2.5">
+            <Lightbulb className="w-4 h-4 text-yellow-400/60 shrink-0 mt-0.5" />
+            <p key={factIdx} className="text-white/50 text-sm leading-snug animate-in fade-in duration-500">
+              {LOADING_FACTS[factIdx % LOADING_FACTS.length]}
+            </p>
           </div>
         </div>
 
@@ -792,7 +814,12 @@ export default function Home() {
             </div>
           </div>
 
-          {error && <p className="text-red-400 text-sm">{error}</p>}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-4 py-3 space-y-1">
+              <p className="text-red-400 text-sm">{error}</p>
+              {errorQuip && <p data-quip className="text-white/40 text-xs italic">{errorQuip}</p>}
+            </div>
+          )}
 
           <button type="submit" disabled={!isReady}
             className="w-full bg-white text-black font-semibold rounded-2xl py-4 text-base hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
