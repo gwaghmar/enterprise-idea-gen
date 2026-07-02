@@ -1,19 +1,27 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
+import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
 
 const encoder = new TextEncoder();
 
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  let body: { item: string; itemType: string; question?: string; solutionContext: string };
+  if (!rateLimit(`explain:${clientIp(req)}`, 60, 3_600_000)) {
+    return tooMany("Too many questions this hour — try again in a bit.");
+  }
+
+  let body: { item?: string; itemType?: string; question?: string; solutionContext?: string };
   try {
     body = await req.json();
   } catch {
     return new Response(JSON.stringify({ error: "Invalid request body" }), { status: 400 });
   }
 
-  const { item, itemType, question, solutionContext } = body;
+  const item = typeof body.item === "string" ? body.item.slice(0, 600) : "";
+  const itemType = typeof body.itemType === "string" ? body.itemType.slice(0, 60) : "";
+  const question = typeof body.question === "string" ? body.question.slice(0, 400) : undefined;
+  const solutionContext = typeof body.solutionContext === "string" ? body.solutionContext.slice(0, 4000) : "";
   if (!item || !solutionContext) {
     return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400 });
   }
@@ -33,7 +41,7 @@ SELECTED ITEM (${itemType}): "${item}"
 
 USER'S QUESTION: "${question}"
 
-Answer their question in 2-4 sentences. Be specific, practical, and grounded in their solution context. No fluff.`
+Answer their question in 2-4 sentences. Be specific, practical, and grounded in their solution context. No fluff. Only discuss this solution and related business/tooling topics — if asked for anything else, briefly decline and steer back to the solution.`
     : `You are an enterprise solution consultant. Explain this item from the user's solution.
 
 SOLUTION CONTEXT:

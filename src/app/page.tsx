@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Sparkles, FileText, Brain, CheckCircle2, Circle, Check, History } from "lucide-react";
 import { newSid, saveToHistory, listHistory } from "@/lib/history";
+import { FREE_MODE } from "@/lib/config";
 
 const ACTIVITY_ICONS: Record<string, typeof Search> = {
   search: Search, found: Sparkles, read: FileText, synth: Brain, done: CheckCircle2,
@@ -504,6 +505,12 @@ export default function Home() {
         body: JSON.stringify(context),
       });
 
+      if (res.status === 429) {
+        const j = await res.json().catch(() => ({}));
+        setError(j.error ?? "You've hit the hourly limit — try again in a bit.");
+        setLoading(false);
+        return;
+      }
       if (!res.ok || !res.body) throw new Error("Request failed");
 
       const reader = res.body.getReader();
@@ -697,7 +704,9 @@ export default function Home() {
             <span className="text-white/40">Get a full solution.</span>
           </h1>
           <p className="text-white/50 text-lg">
-            AI researches, reasons, and builds you a visual workflow. Review free — pay $1 only if you like it.
+            {FREE_MODE
+              ? "AI researches, reasons, and builds you a visual workflow. Free while in beta — no card, no signup."
+              : "AI researches, reasons, and builds you a visual workflow. Review free — pay $1 only if you like it."}
           </p>
         </div>
 
@@ -792,7 +801,7 @@ export default function Home() {
         </form>
 
         <p className="text-center text-white/30 text-sm mt-6">
-          Preview is free · Pay $1 only after you approve
+          {FREE_MODE ? "Free during beta · Your reports auto-save to My Solutions" : "Preview is free · Pay $1 only after you approve"}
         </p>
       </div>
     </main>

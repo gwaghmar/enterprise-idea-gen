@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Trash2, Lock, BadgeCheck, ChevronRight } from "lucide-react";
 import { listHistory, loadPayload, removeFromHistory, type HistoryRecord } from "@/lib/history";
+import { FREE_MODE } from "@/lib/config";
 
 export default function HistoryPage() {
   const [records, setRecords] = useState<HistoryRecord[]>([]);
@@ -71,9 +72,9 @@ export default function HistoryPage() {
                     <p className="font-semibold text-white truncate">{rec.title}</p>
                     {rec.paid ? (
                       <span className="flex items-center gap-1 text-xs text-emerald-400 shrink-0"><BadgeCheck className="w-3.5 h-3.5" /> Unlocked</span>
-                    ) : (
+                    ) : !FREE_MODE ? (
                       <span className="flex items-center gap-1 text-xs text-white/30 shrink-0"><Lock className="w-3 h-3" /> Preview</span>
-                    )}
+                    ) : null}
                   </div>
                   <p className="text-white/45 text-sm truncate">{rec.problem}</p>
                   <p className="text-white/25 text-xs mt-1">{new Date(rec.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</p>
