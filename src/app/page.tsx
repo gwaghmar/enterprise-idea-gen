@@ -77,15 +77,19 @@ const STEP_LABELS = [
 
 function VoiceButton({ onTranscript }: { onTranscript: (t: string) => void }) {
   const [state, setState] = useState<"idle" | "listening" | "unsupported">("idle");
+  const [micError, setMicError] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recRef = useRef<any>(null);
   const interimRef = useRef("");
+  const heldRef = useRef(false);
 
   const start = useCallback(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;
     const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SR) { setState("unsupported"); return; }
+    setMicError("");
+    heldRef.current = true;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rec: any = new SR();
@@ -106,13 +110,45 @@ function VoiceButton({ onTranscript }: { onTranscript: (t: string) => void }) {
       onTranscript((interimRef.current + " " + interim).trim());
     };
 
-    rec.onerror = () => setState("idle");
-    rec.start();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onerror = (e: any) => {
+      const code = e?.error ?? "";
+      if (code === "not-allowed" || code === "service-not-allowed") {
+        setMicError("Microphone blocked — allow mic access for this site and try again.");
+        heldRef.current = false;
+        setState("idle");
+      } else if (code === "network") {
+        setMicError("Speech service unavailable — check your connection and try again.");
+        heldRef.current = false;
+        setState("idle");
+      }
+      // "no-speech" and "aborted" are benign — onend handles recovery
+    };
+
+    // Chrome ends recognition on its own after silences/timeouts. Without
+    // this, the UI kept saying "Listening..." while the mic was dead —
+    // restart while the button is still held so dictation never silently dies.
+    rec.onend = () => {
+      if (heldRef.current && recRef.current === rec) {
+        try { rec.start(); } catch { heldRef.current = false; setState("idle"); }
+      } else if (recRef.current === rec || !recRef.current) {
+        setState("idle");
+      }
+    };
+
+    try {
+      rec.start();
+    } catch {
+      setMicError("Could not start the microphone.");
+      heldRef.current = false;
+      return;
+    }
     recRef.current = rec;
     setState("listening");
   }, [onTranscript]);
 
   const stop = useCallback(() => {
+    heldRef.current = false;
     recRef.current?.stop();
     recRef.current = null;
     setState("idle");
@@ -121,6 +157,7 @@ function VoiceButton({ onTranscript }: { onTranscript: (t: string) => void }) {
   if (state === "unsupported") return null;
 
   return (
+    <>
     <button
       type="button"
       onMouseDown={start}
@@ -146,6 +183,8 @@ function VoiceButton({ onTranscript }: { onTranscript: (t: string) => void }) {
       </svg>
       {state === "listening" ? "Listening..." : "Hold to speak"}
     </button>
+    {micError && <span className="ml-2 text-red-400 text-xs self-center max-w-[260px]">{micError}</span>}
+    </>
   );
 }
 
@@ -643,7 +682,7 @@ export default function Home() {
               placeholder="e.g. We need to automate invoice processing and sync it with our CRM..."
               className="w-full bg-white/5 border border-white/15 rounded-2xl p-5 pb-14 text-white placeholder:text-white/30 resize-none h-36 focus:outline-none focus:border-white/40 text-base transition-colors"
             />
-            <div className="absolute bottom-3 left-3">
+            <div className="absolute bottom-3 left-3 flex items-center">
               <VoiceButton onTranscript={(t) => setProblem(t)} />
             </div>
             {problem && (
