@@ -75,13 +75,13 @@ const STEP_LABELS = [
   { step: 4, label: "Building solution", icon: "◎" },
 ];
 
-function VoiceButton({ onTranscript }: { onTranscript: (t: string) => void }) {
+function VoiceButton({ onTranscript, currentText }: { onTranscript: (t: string) => void; currentText: string }) {
   const [state, setState] = useState<"idle" | "listening" | "unsupported">("idle");
   const [micError, setMicError] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recRef = useRef<any>(null);
   const interimRef = useRef("");
-  const heldRef = useRef(false);
+  const activeRef = useRef(false);
 
   const start = useCallback(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,14 +89,15 @@ function VoiceButton({ onTranscript }: { onTranscript: (t: string) => void }) {
     const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SR) { setState("unsupported"); return; }
     setMicError("");
-    heldRef.current = true;
+    activeRef.current = true;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rec: any = new SR();
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = "en-US";
-    interimRef.current = "";
+    // Append to whatever is already typed instead of overwriting it
+    interimRef.current = currentText.trim() ? currentText.trim() + " " : "";
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onresult = (e: any) => {
@@ -115,11 +116,11 @@ function VoiceButton({ onTranscript }: { onTranscript: (t: string) => void }) {
       const code = e?.error ?? "";
       if (code === "not-allowed" || code === "service-not-allowed") {
         setMicError("Microphone blocked — allow mic access for this site and try again.");
-        heldRef.current = false;
+        activeRef.current = false;
         setState("idle");
       } else if (code === "network") {
         setMicError("Speech service unavailable — check your connection and try again.");
-        heldRef.current = false;
+        activeRef.current = false;
         setState("idle");
       }
       // "no-speech" and "aborted" are benign — onend handles recovery
@@ -127,10 +128,10 @@ function VoiceButton({ onTranscript }: { onTranscript: (t: string) => void }) {
 
     // Chrome ends recognition on its own after silences/timeouts. Without
     // this, the UI kept saying "Listening..." while the mic was dead —
-    // restart while the button is still held so dictation never silently dies.
+    // restart while the mic is toggled on so dictation never silently dies.
     rec.onend = () => {
-      if (heldRef.current && recRef.current === rec) {
-        try { rec.start(); } catch { heldRef.current = false; setState("idle"); }
+      if (activeRef.current && recRef.current === rec) {
+        try { rec.start(); } catch { activeRef.current = false; setState("idle"); }
       } else if (recRef.current === rec || !recRef.current) {
         setState("idle");
       }
@@ -140,15 +141,15 @@ function VoiceButton({ onTranscript }: { onTranscript: (t: string) => void }) {
       rec.start();
     } catch {
       setMicError("Could not start the microphone.");
-      heldRef.current = false;
+      activeRef.current = false;
       return;
     }
     recRef.current = rec;
     setState("listening");
-  }, [onTranscript]);
+  }, [onTranscript, currentText]);
 
   const stop = useCallback(() => {
-    heldRef.current = false;
+    activeRef.current = false;
     recRef.current?.stop();
     recRef.current = null;
     setState("idle");
@@ -160,11 +161,7 @@ function VoiceButton({ onTranscript }: { onTranscript: (t: string) => void }) {
     <>
     <button
       type="button"
-      onMouseDown={start}
-      onMouseUp={stop}
-      onMouseLeave={stop}
-      onTouchStart={(e) => { e.preventDefault(); start(); }}
-      onTouchEnd={(e) => { e.preventDefault(); stop(); }}
+      onClick={() => (state === "listening" ? stop() : start())}
       className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium select-none transition-all ${
         state === "listening"
           ? "bg-red-500 text-white shadow-lg shadow-red-500/30"
@@ -181,7 +178,7 @@ function VoiceButton({ onTranscript }: { onTranscript: (t: string) => void }) {
         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
         <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
       </svg>
-      {state === "listening" ? "Listening..." : "Hold to speak"}
+      {state === "listening" ? "Listening — tap to stop" : "Tap to speak"}
     </button>
     {micError && <span className="ml-2 text-red-400 text-xs self-center max-w-[260px]">{micError}</span>}
     </>
@@ -683,7 +680,7 @@ export default function Home() {
               className="w-full bg-white/5 border border-white/15 rounded-2xl p-5 pb-14 text-white placeholder:text-white/30 resize-none h-36 focus:outline-none focus:border-white/40 text-base transition-colors"
             />
             <div className="absolute bottom-3 left-3 flex items-center">
-              <VoiceButton onTranscript={(t) => setProblem(t)} />
+              <VoiceButton onTranscript={(t) => setProblem(t)} currentText={problem} />
             </div>
             {problem && (
               <button
