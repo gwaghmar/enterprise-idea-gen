@@ -9,6 +9,17 @@ import {
   Lock, Mail, Copy, FileDown, History,
 } from "lucide-react";
 import { isPaid, updateHistory } from "@/lib/history";
+import { FREE_MODE } from "@/lib/config";
+
+// Citations/activity URLs come from external sources — only render links for
+// http(s) URLs so a crafted share payload can't smuggle javascript: links
+function safeHttpUrl(u: string | undefined): string | null {
+  if (!u) return null;
+  try {
+    const p = new URL(u);
+    return p.protocol === "http:" || p.protocol === "https:" ? u : null;
+  } catch { return null; }
+}
 
 const ACTIVITY_ICONS: Record<string, typeof Search> = {
   search: Search, found: Sparkles, read: FileText, synth: Brain, done: CheckCircle2,
@@ -298,8 +309,8 @@ function ActivityModal({ activity, focusUrl, onClose }: {
                 ) : (
                   <ActivityIcon type={a.type} className="w-4 h-4 mt-0.5 shrink-0 text-white/45" />
                 )}
-                {a.url
-                  ? <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-blue-300/90 hover:text-blue-200 leading-snug break-all">{a.text}</a>
+                {safeHttpUrl(a.url)
+                  ? <a href={safeHttpUrl(a.url)!} target="_blank" rel="noopener noreferrer" className="text-blue-300/90 hover:text-blue-200 leading-snug break-all">{a.text}</a>
                   : <span className="text-white/70 leading-snug">{a.text}</span>}
               </div>
             );
@@ -332,6 +343,7 @@ export default function SolutionPage() {
   const [askBtn, setAskBtn] = useState<{ text: string; top: number; left: number } | null>(null);
   const [sid, setSid] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
+  const [paidReal, setPaidReal] = useState(false);
   const [copiedTicket, setCopiedTicket] = useState<number | null>(null);
   const router = useRouter();
   const rawDataRef = useRef<Record<string, unknown>>({});
@@ -370,7 +382,8 @@ export default function SolutionPage() {
     setCitations(data.citations ?? []);
     setActivity(data.activity ?? []);
     setSid(data.sid ?? null);
-    setUnlocked(Boolean(data.paid) || isPaid(data.sid));
+    setPaidReal(Boolean(data.paid) || isPaid(data.sid));
+    setUnlocked(FREE_MODE || Boolean(data.paid) || isPaid(data.sid));
     if (data.solution?.title) document.title = `${data.solution.title} — ERPHigh`;
     setModel(data.model ?? "");
     setTokens(data.tokens ?? null);
@@ -978,8 +991,10 @@ export default function SolutionPage() {
                       <p className="text-xs text-white/35 truncate">{url.replace(/^https?:\/\//, "")}</p>
                     </div>
                     {activity.length > 0 && <span className="ml-auto text-white/25 group-hover:text-white/60 text-xs transition-colors shrink-0">trace</span>}
-                    <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
-                      className="text-white/20 group-hover:text-white/50 transition-colors shrink-0" title="Open source"><ArrowUpRight className="w-4 h-4" /></a>
+                    {safeHttpUrl(url) && (
+                      <a href={safeHttpUrl(url)!} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                        className="text-white/20 group-hover:text-white/50 transition-colors shrink-0" title="Open source"><ArrowUpRight className="w-4 h-4" /></a>
+                    )}
                   </div>
                 );
               })}
@@ -991,7 +1006,7 @@ export default function SolutionPage() {
         <div className="border border-white/10 rounded-2xl p-8 text-center">
           {unlocked ? (
             <>
-              <h2 className="text-2xl font-bold mb-2 flex items-center justify-center gap-2"><CheckCircle2 className="w-6 h-6 text-emerald-400" /> You own this solution</h2>
+              <h2 className="text-2xl font-bold mb-2 flex items-center justify-center gap-2"><CheckCircle2 className="w-6 h-6 text-emerald-400" /> {paidReal ? "You own this solution" : "Free during beta"}</h2>
               <p className="text-white/50 mb-6">The full report is unlocked — export it, share it, or find it later in My Solutions.</p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button onClick={handleExport} disabled={exporting}
