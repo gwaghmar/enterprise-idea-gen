@@ -358,13 +358,14 @@ function MultiChips({ options, selected, onToggle, exclusive = [] }: {
         const isExclusive = exclusive.includes(o);
         return (
           <button key={o} type="button" onClick={() => onToggle(o)}
-            className={`px-4 py-1.5 rounded-full text-sm border transition-all ${
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm border transition-all ${
               isSelected
                 ? isExclusive
                   ? "bg-white/20 text-white border-white/50 font-medium"
                   : "bg-white text-black border-white font-medium"
                 : "bg-transparent text-white/50 border-white/20 hover:border-white/50 hover:text-white/80"
             }`}>
+            {isSelected && !isExclusive && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
             {o}
           </button>
         );
@@ -810,7 +811,14 @@ export default function Home() {
               <Chips options={TECH_LEVELS} selected={techLevel} onSelect={setTechLevel} />
             </div>
             <div className="space-y-2">
-              <p className="text-white/40 text-xs uppercase tracking-wider">Current stack <span className="text-white/25 normal-case tracking-normal">(pick all that apply)</span></p>
+              <p className="text-white/40 text-xs uppercase tracking-wider">
+                Current stack <span className="text-white/25 normal-case tracking-normal">(pick all that apply)</span>
+                {(stacks.filter((s) => s !== "Recommend for me").length + extraStacks.length) > 0 && (
+                  <span className="ml-2 text-emerald-400/80 normal-case tracking-normal font-medium">
+                    {stacks.filter((s) => s !== "Recommend for me").length + extraStacks.length} selected
+                  </span>
+                )}
+              </p>
               <MultiChips
                 options={STACKS}
                 selected={stacks}
@@ -834,7 +842,14 @@ export default function Home() {
               <Chips options={TIMELINES} selected={timeline} onSelect={setTimeline} />
             </div>
             <div className="space-y-2">
-              <p className="text-white/40 text-xs uppercase tracking-wider">Compliance / data sensitivity <span className="text-white/25 normal-case tracking-normal">(pick all that apply)</span></p>
+              <p className="text-white/40 text-xs uppercase tracking-wider">
+                Compliance / data sensitivity <span className="text-white/25 normal-case tracking-normal">(pick all that apply)</span>
+                {compliance.filter((c) => c !== "None / Not sure").length > 0 && (
+                  <span className="ml-2 text-emerald-400/80 normal-case tracking-normal font-medium">
+                    {compliance.filter((c) => c !== "None / Not sure").length} selected
+                  </span>
+                )}
+              </p>
               <MultiChips
                 options={COMPLIANCE}
                 selected={compliance}
