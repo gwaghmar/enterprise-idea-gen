@@ -373,7 +373,7 @@ function MultiChips({ options, selected, onToggle, exclusive = [] }: {
   );
 }
 
-function ProgressRing({ progress }: { progress: number }) {
+function ProgressRing({ progress, elapsed }: { progress: number; elapsed: number }) {
   const r = 80;
   const circ = 2 * Math.PI * r;
   const offset = circ - (progress / 100) * circ;
@@ -388,11 +388,15 @@ function ProgressRing({ progress }: { progress: number }) {
           strokeDasharray={circ}
           strokeDashoffset={offset}
           strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 0.6s cubic-bezier(0.4,0,0.2,1)" }}
+          style={{
+            transition: "stroke-dashoffset 0.3s linear",
+            filter: "drop-shadow(0 0 6px rgba(255,255,255,0.35))",
+          }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-5xl font-bold text-white tabular-nums">{progress}<span className="text-2xl text-white/50">%</span></span>
+        <span className="text-5xl font-bold text-white tabular-nums">{Math.floor(progress)}<span className="text-2xl text-white/50">%</span></span>
+        <span className="text-white/30 text-xs mt-1 tabular-nums">{elapsed}s · typically 60–90s</span>
       </div>
     </div>
   );
@@ -411,7 +415,11 @@ export default function Home() {
   const [techLevel, setTechLevel] = useState("");
   const [compliance, setCompliance] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(0);        // latest value from the server
+  const [smoothProgress, setSmoothProgress] = useState(0); // what the ring displays
+  const [elapsed, setElapsed] = useState(0);
+  const targetRef = useRef(0);
+  const startedAtRef = useRef(0);
   const [currentStep, setCurrentStep] = useState(0);
   const [stepMessage, setStepMessage] = useState("");
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
@@ -433,6 +441,25 @@ export default function Home() {
     if (!loading) return;
     setFactIdx(Math.floor(Math.random() * LOADING_FACTS.length));
     const t = setInterval(() => setFactIdx((i) => i + 1), 6000);
+    return () => clearInterval(t);
+  }, [loading]);
+
+  // Smooth the ring: glide toward the latest server value and trickle a few
+  // points past it while waiting, so long steps never look frozen
+  useEffect(() => { targetRef.current = progress; }, [progress]);
+  useEffect(() => {
+    if (!loading) return;
+    const t = setInterval(() => {
+      setSmoothProgress((s) => {
+        const target = targetRef.current;
+        if (target >= 100) return 100;
+        const ceiling = Math.min(target + 7, 97); // trickle headroom, hard cap
+        if (s >= ceiling) return s;
+        const step = Math.max(0.12, (ceiling - s) * 0.055);
+        return Math.min(ceiling, s + step);
+      });
+      setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000));
+    }, 120);
     return () => clearInterval(t);
   }, [loading]);
 
@@ -488,6 +515,9 @@ export default function Home() {
 
     setLoading(true);
     setProgress(1);
+    setSmoothProgress(1);
+    setElapsed(0);
+    startedAtRef.current = Date.now();
     setCurrentStep(1);
     setCompletedSteps([]);
     setActivityFeed([]);
@@ -624,7 +654,7 @@ export default function Home() {
       <div className="min-h-screen bg-black flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-3xl grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
         <div className="w-full max-w-sm mx-auto text-center space-y-10">
-          <ProgressRing progress={progress} />
+          <ProgressRing progress={smoothProgress} elapsed={elapsed} />
 
           <div className="space-y-1">
             <p className="text-white font-medium text-lg">{stepMessage}</p>

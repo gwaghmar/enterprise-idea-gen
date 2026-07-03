@@ -85,9 +85,13 @@ export async function POST(req: NextRequest) {
       };
       try {
         // ── Step 1: Perplexity — targeted enterprise research ──────────────
-        send(controller, { progress: 5, step: 1, message: "Searching for enterprise tools and case studies..." });
-        act({ type: "search", text: `Researching enterprise tools & case studies for "${problem.slice(0, 60)}${problem.length > 60 ? "…" : ""}"` });
+        send(controller, { progress: 4, step: 1, message: "Searching for enterprise tools and case studies..." });
+        act({ type: "search", text: `Researching solutions for "${problem.slice(0, 60)}${problem.length > 60 ? "…" : ""}"` });
         act({ type: "search", text: `Scoping to ${industry} · ${size} · ${stack}` });
+        act({ type: "search", text: "Comparing tools, published pricing tiers & real case studies" });
+        if (compliance !== "Not specified") {
+          act({ type: "search", text: `Filtering for compliance fit: ${compliance}` });
+        }
         const t1 = Date.now();
 
         const searchResult = await openrouter.chat.completions.create({
@@ -128,10 +132,11 @@ Be specific and concise: name exact products, pricing tiers, integration methods
         log(reqId, "perplexity_done", { ms: Date.now() - t1, citations: citations.length, tokens: searchResult.usage?.total_tokens });
 
         send(controller, {
-          progress: 30, step: 1,
+          progress: 28, step: 1,
           message: citations.length > 0 ? `Found ${citations.length} sources` : "Research complete",
           citations, done: false,
         });
+        act({ type: "found", text: `Research complete in ${Math.round((Date.now() - t1) / 1000)}s` });
         if (citations.length > 0) {
           act({ type: "found", text: `Found ${citations.length} sources` });
           citations.slice(0, 8).forEach((url) => act({ type: "source", text: hostOf(url), url }));
@@ -143,26 +148,33 @@ Be specific and concise: name exact products, pricing tiers, integration methods
         let sourceContent = "";
         if (citations.length > 0) {
           const topUrls = citations.slice(0, 3);
-          send(controller, { progress: 35, step: 2, message: `Reading ${topUrls.length} sources in parallel...` });
-          topUrls.forEach((url) => act({ type: "read", text: `Reading ${hostOf(url)}`, url }));
+          send(controller, { progress: 30, step: 2, message: `Reading ${topUrls.length} sources in parallel...` });
           const t2 = Date.now();
 
-          const jinaResults = await Promise.all(topUrls.map((url) => jinaFetch(url)));
+          // Emit a detail line as each source finishes, not just a summary
+          let readDone = 0;
+          const jinaResults = await Promise.all(topUrls.map((url) =>
+            jinaFetch(url).then((txt) => {
+              readDone++;
+              if (txt) act({ type: "read", text: `Read ${hostOf(url)} (${(txt.length / 1000).toFixed(1)}k chars)`, url });
+              else act({ type: "read", text: `${hostOf(url)} didn't respond — skipping`, url });
+              send(controller, { progress: 30 + readDone * 4, step: 2, message: `Read ${readDone} of ${topUrls.length} sources` });
+              return txt;
+            })
+          ));
           sourceContent = topUrls
             .map((url, i) => jinaResults[i] ? `SOURCE: ${url}\n${jinaResults[i]}` : "")
             .filter(Boolean)
             .join("\n\n---\n\n");
 
           log(reqId, "jina_done", { ms: Date.now() - t2, sourcesRead: jinaResults.filter(Boolean).length });
-          send(controller, { progress: 58, step: 2, message: `Read ${jinaResults.filter(Boolean).length} sources` });
-          act({ type: "read", text: `Read ${jinaResults.filter(Boolean).length} of ${topUrls.length} sources in full` });
         } else {
-          send(controller, { progress: 58, step: 2, message: "Proceeding with research findings" });
+          send(controller, { progress: 42, step: 2, message: "Proceeding with research findings" });
         }
 
         // ── Step 3: Claude Sonnet — structured solution synthesis ──────────
-        send(controller, { progress: 63, step: 3, message: "Claude synthesizing your solution..." });
-        act({ type: "synth", text: "Claude synthesizing your solution from the research" });
+        send(controller, { progress: 45, step: 3, message: "Claude synthesizing your solution..." });
+        act({ type: "synth", text: "Claude is reasoning over the research" });
         const t3 = Date.now();
 
         const synthesisPrompt = `You are a senior enterprise solution architect with 20 years of experience at McKinsey and Gartner. Build a specific, opinionated solution — not a generic overview. You cover not just WHICH tools, but exactly HOW to get them approved and rolled out inside this specific company.
@@ -330,18 +342,39 @@ Node labels: 3-5 words MAX. Node IDs must be unique (p1_, p2_, p3_ prefixes).`;
         let fullContent = "";
         let tokenCount = 0;
 
+        // Narrate the report as its sections stream out (schema-ordered)
+        const SECTION_MARKERS: [string, string][] = [
+          ['"insight"', "Leading with the key insight"],
+          ['"tools"', "Selecting the tool stack"],
+          ['"phases"', "Building the implementation phases"],
+          ['"estimatedCost"', "Itemizing the costs"],
+          ['"tco"', "Calculating total cost of ownership"],
+          ['"kpis"', "Defining success metrics"],
+          ['"adoptionPlan"', "Writing the adoption plan"],
+          ['"alternative"', "Drafting the Option B alternative"],
+          ['"rolloutPlaybook"', "Mapping your internal rollout & tickets"],
+          ['"approvals"', "Listing approvals, IT controls & risks"],
+          ['"vendorOutreach"', "Drafting the vendor outreach email"],
+        ];
+        let markerIdx = 0;
+
         for await (const chunk of synthesisStream) {
           const delta = chunk.choices[0]?.delta?.content || "";
           fullContent += delta;
           tokenCount++;
-          if (tokenCount % 15 === 0) {
-            const progress = Math.min(90, 63 + Math.floor((tokenCount / 250) * 27));
-            send(controller, { progress, step: 3, message: `Building your solution... (${tokenCount} tokens)` });
+          if (tokenCount % 10 === 0) {
+            // ~4800 tokens for a full report → map onto 45..95
+            const progress = 45 + Math.min(50, Math.floor((tokenCount / 4800) * 50));
+            send(controller, { progress, step: 3, message: "Writing your report..." });
+            while (markerIdx < SECTION_MARKERS.length && fullContent.includes(SECTION_MARKERS[markerIdx][0])) {
+              act({ type: "synth", text: SECTION_MARKERS[markerIdx][1] });
+              markerIdx++;
+            }
           }
         }
 
         log(reqId, "claude_done", { ms: Date.now() - t3, tokens: tokenCount, contentLen: fullContent.length });
-        send(controller, { progress: 93, step: 3, message: "Parsing solution..." });
+        send(controller, { progress: 96, step: 4, message: "Assembling your report..." });
 
         // Claude returns clean JSON — no <think> tags to strip
         function tryParse(text: string) {
@@ -357,7 +390,7 @@ Node labels: 3-5 words MAX. Node IDs must be unique (p1_, p2_, p3_ prefixes).`;
         } catch (parseErr) {
           // One retry — re-run the synthesis non-streamed before giving up
           console.error(JSON.stringify({ reqId, step: "json_parse_failed", attempt: 1, contentLen: fullContent.length, preview: fullContent.slice(0, 300), error: String(parseErr) }));
-          send(controller, { progress: 94, step: 3, message: "Refining the solution..." });
+          send(controller, { progress: 97, step: 4, message: "Refining the solution..." });
           try {
             const retry = await openrouter.chat.completions.create({
               model: "anthropic/claude-sonnet-4-5",
