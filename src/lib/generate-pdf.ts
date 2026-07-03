@@ -14,7 +14,7 @@ interface TcoLineItem { item: string; type: string; cost: string; }
 interface Kpi { metric: string; baseline?: string; target: string; timeframe?: string; }
 interface AdoptionStep { title: string; detail: string; }
 interface Solution {
-  title: string; summary: string; tools: Tool[];
+  title: string; insight?: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
   rolloutPlaybook?: { stakeholders?: Stakeholder[]; tickets?: Ticket[] };
   approvals?: { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[] };
@@ -91,10 +91,10 @@ function nodeColor(type: string) {
 function drawFlowChart(doc: jsPDF, nodes: FlowNode[], edges: FlowEdge[], originX: number, originY: number, areaW: number, areaH: number) {
   if (!nodes || nodes.length === 0) return;
 
-  const NW = 38, NH = 14;
+  const NW = 46, NH = 17;
   const g = new Dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "LR", nodesep: 20, ranksep: 30 });
+  g.setGraph({ rankdir: "LR", nodesep: 18, ranksep: 24 });
   nodes.forEach((n) => g.setNode(n.id, { width: NW, height: NH }));
   edges.forEach((e) => { try { g.setEdge(e.from, e.to); } catch { /* skip */ } });
   Dagre.layout(g);
@@ -152,11 +152,16 @@ function drawFlowChart(doc: jsPDF, nodes: FlowNode[], edges: FlowEdge[], originX
     doc.setDrawColor(...c.stroke);
     doc.setLineWidth(0.4);
     doc.roundedRect(x, y, nw, nh, 2, 2, "FD");
-    doc.setFontSize(6.5);
+    // Size the label to the node's RENDERED width (post-scale), up to 2 lines,
+    // so text never spills out or breaks mid-word
+    const fontSize = Math.max(4.8, Math.min(6.5, nw * 0.17));
+    doc.setFontSize(fontSize);
     doc.setTextColor(...c.text);
     doc.setFont("helvetica", "bold");
-    const label = doc.splitTextToSize(n.label, nw - 3);
-    doc.text(label[0] ?? "", x + nw / 2, y + nh / 2 + 2, { align: "center" });
+    const lines = (doc.splitTextToSize(n.label, nw - 3) as string[]).slice(0, 2);
+    const lineH = fontSize * 0.42;
+    const startY = y + nh / 2 + fontSize * 0.15 - ((lines.length - 1) * lineH) / 2;
+    lines.forEach((ln, li) => doc.text(ln, x + nw / 2, startY + li * lineH, { align: "center" }));
   });
 }
 
@@ -255,9 +260,22 @@ export async function generatePDF(
   const sLines = doc.splitTextToSize(solution.summary, CW - 4);
   doc.text(sLines, ML + 4, py);
 
-  // Context grid (bottom section)
-  const gridY = H - 80;
-  doc.setDrawColor(37, 99, 235, 0.3);
+  // Context grid (bottom section) — every profile field the user gave us
+  const ctxItems = [
+    { label: "INDUSTRY", value: context.industry },
+    { label: "SIZE", value: context.size },
+    { label: "REQUESTING TEAM", value: context.team },
+    { label: "USERS / SEATS", value: context.seats },
+    { label: "STACK", value: context.stack },
+    { label: "BUDGET", value: context.budget },
+    { label: "TIMELINE", value: context.timeline },
+    { label: "COMPLIANCE", value: context.compliance },
+  ].filter((i) => i.value && i.value !== "Not specified");
+
+  const ctxRows = Math.ceil(ctxItems.length / 2);
+  const rowStep = 17;
+  const gridY = H - (ctxRows * rowStep + 32);
+  doc.setDrawColor(37, 99, 235);
   doc.setLineWidth(0.3);
   doc.line(ML + 4, gridY, W - MR, gridY);
 
@@ -265,24 +283,19 @@ export async function generatePDF(
   doc.setTextColor(...C.light);
   doc.text("COMPANY CONTEXT", ML + 4, gridY + 8);
 
-  const ctxItems = [
-    { label: "SIZE", value: context.size },
-    { label: "STACK", value: context.stack },
-    { label: "BUDGET", value: context.budget },
-    { label: "TIMELINE", value: context.timeline },
-  ];
   const colW = CW / 2;
   ctxItems.forEach((item, i) => {
     const cx = ML + 4 + (i % 2) * colW;
-    const cy = gridY + 18 + Math.floor(i / 2) * 18;
+    const cy = gridY + 17 + Math.floor(i / 2) * rowStep;
     doc.setFontSize(7);
     doc.setTextColor(...C.light);
     doc.setFont("helvetica", "normal");
     doc.text(item.label, cx, cy);
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setTextColor(...C.white);
     doc.setFont("helvetica", "bold");
-    doc.text(item.value, cx, cy + 6);
+    const vLines = (doc.splitTextToSize(item.value!, colW - 12) as string[]).slice(0, 2);
+    doc.text(vLines, cx, cy + 5);
   });
 
   // Generated date
@@ -316,7 +329,30 @@ export async function generatePDF(
 
   // Summary text
   y = wrapText(doc, solution.summary, ML, y, CW, 11, C.dark, "normal");
-  y += 6;
+  y += 4;
+
+  // Key insight callout
+  if (solution.insight) {
+    const insightLines = doc.splitTextToSize(solution.insight, CW - 14) as string[];
+    const boxH = insightLines.length * 4.6 + 9;
+    doc.setFillColor(239, 246, 255);
+    doc.setDrawColor(...C.accent);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(ML, y, CW, boxH, 2, 2, "FD");
+    doc.setFillColor(...C.accent);
+    doc.rect(ML, y, 1.4, boxH, "F");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.accent);
+    doc.setFont("helvetica", "bold");
+    doc.text("KEY INSIGHT", ML + 5, y + 5);
+    doc.setFontSize(9);
+    doc.setTextColor(...C.dark);
+    doc.setFont("helvetica", "italic");
+    doc.text(insightLines, ML + 5, y + 10);
+    y += boxH + 6;
+  } else {
+    y += 2;
+  }
 
   // Key metrics — 3 boxes
   const boxW = (CW - 8) / 3;
@@ -392,22 +428,24 @@ export async function generatePDF(
   y += 7;
 
   solution.tools.forEach((tool, i) => {
-    if (y > H - 30) { doc.addPage(); page++; y = MT + 10; doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F"); }
+    if (y > H - 34) { doc.addPage(); page++; y = MT + 10; doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F"); }
     const bg = i % 2 === 0 ? C.white : C.bgLight;
-    const rowH = 12;
+    // Wrap purpose to two lines instead of truncating mid-sentence
+    const purposeLines = (doc.splitTextToSize(tool.purpose, colWidths[2] - 4) as string[]).slice(0, 2);
+    const rowH = purposeLines.length > 1 ? 15 : 11;
     doc.setFillColor(...bg);
     doc.rect(ML, y, CW, rowH, "F");
     doc.setFontSize(8);
     doc.setTextColor(...C.dark);
     doc.setFont("helvetica", "bold");
-    doc.text(tool.name, ML + 2, y + 5);
+    doc.text(tool.name, ML + 2, y + 5.5);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...C.mid);
     doc.setFontSize(7.5);
-    doc.text(tool.category, ML + 2 + colWidths[0], y + 5);
-    const purposeLines = doc.splitTextToSize(tool.purpose, colWidths[2] - 4);
+    doc.text(tool.category, ML + 2 + colWidths[0], y + 5.5);
     doc.setTextColor(...C.dark);
-    doc.text(purposeLines[0], ML + 2 + colWidths[0] + colWidths[1], y + 5);
+    doc.setFontSize(7.5);
+    doc.text(purposeLines, ML + 2 + colWidths[0] + colWidths[1], y + 5);
     doc.setDrawColor(...C.rule);
     doc.setLineWidth(0.2);
     doc.line(ML, y + rowH, ML + CW, y + rowH);
@@ -417,107 +455,108 @@ export async function generatePDF(
   addPageNum(doc, page);
 
   // ══════════════════════════════════════════════
-  // PAGE(S) — IMPLEMENTATION PHASES
+  // PAGE(S) — IMPLEMENTATION PLAN (phases flow continuously)
   // ══════════════════════════════════════════════
-  solution.phases.forEach((phase, phaseIdx) => {
+  function newFlowPage() {
+    addPageNum(doc, page);
     doc.addPage();
     page++;
     doc.setFillColor(...C.bgLight);
     doc.rect(0, 0, W, H, "F");
     doc.setFillColor(...C.accent);
     doc.rect(0, 0, W, 1.5, "F");
-
     y = MT;
     doc.setFontSize(8);
     doc.setTextColor(...C.light);
     doc.setFont("helvetica", "normal");
     doc.text(solution.title.toUpperCase(), ML, y + 4);
     y += 12;
+  }
+  function flowRoom(needed: number) {
+    if (y > H - needed) newFlowPage();
+  }
 
-    // Phase number badge
-    doc.setFillColor(...C.accent);
-    doc.circle(ML + 4, y + 2, 4, "F");
-    doc.setFontSize(8);
-    doc.setTextColor(...C.white);
-    doc.setFont("helvetica", "bold");
-    doc.text(`${phaseIdx + 1}`, ML + 4, y + 4.5, { align: "center" });
+  if (solution.phases.length > 0) {
+    newFlowPage();
+    y = sectionLabel(doc, "Implementation Plan", y);
 
-    // Phase title
-    doc.setFontSize(16);
-    doc.setTextColor(...C.dark);
-    doc.setFont("helvetica", "bold");
-    doc.text(phase.title, ML + 12, y + 6);
-    y += 14;
+    solution.phases.forEach((phase, phaseIdx) => {
+      const hasChart = !!(phase.nodes && phase.nodes.length > 0);
+      const chartH = 26;
 
-    rule(doc, y);
-    y += 8;
-
-    // Actions + flowchart side by side
-    const leftW = phase.nodes && phase.nodes.length > 0 ? CW * 0.45 : CW;
-    const rightW = CW - leftW - 6;
-
-    // Actions
-    y = sectionLabel(doc, "Implementation Actions", y);
-    phase.actions.forEach((action) => {
-      if (y > H - 40) return;
+      // Estimate the block height so a phase never splits across pages
       doc.setFontSize(8);
-      doc.setTextColor(...C.accent);
+      let estH = 12 + (hasChart ? chartH + 5 : 0);
+      phase.actions.forEach((a) => {
+        estH += (doc.splitTextToSize(a, CW - 8) as string[]).length * 4.6 + 2;
+      });
+      flowRoom(estH + 14);
+
+      // Phase badge + title
+      doc.setFillColor(...C.accent);
+      doc.circle(ML + 3.5, y + 1.5, 3.5, "F");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...C.white);
       doc.setFont("helvetica", "bold");
-      doc.text("›", ML, y + 1);
+      doc.text(`${phaseIdx + 1}`, ML + 3.5, y + 3.7, { align: "center" });
+      doc.setFontSize(12);
       doc.setTextColor(...C.dark);
-      doc.setFont("helvetica", "normal");
-      const aLines = doc.splitTextToSize(action, leftW - 8);
-      doc.text(aLines, ML + 5, y + 1);
-      y += aLines.length * 5 + 2;
+      doc.text(phase.title, ML + 10, y + 4);
+      y += 11;
+
+      // Actions (full width)
+      phase.actions.forEach((action) => {
+        doc.setFontSize(8);
+        doc.setTextColor(...C.accent);
+        doc.setFont("helvetica", "bold");
+        doc.text(">", ML + 1, y + 1);
+        doc.setTextColor(...C.dark);
+        doc.setFont("helvetica", "normal");
+        const aLines = doc.splitTextToSize(action, CW - 8) as string[];
+        doc.text(aLines, ML + 6, y + 1);
+        y += aLines.length * 4.6 + 2;
+      });
+
+      // Flowchart below the actions, full width — nodes render large enough to read
+      if (hasChart) {
+        y += 2;
+        doc.setFillColor(...C.white);
+        doc.setDrawColor(...C.rule);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(ML, y, CW, chartH, 2, 2, "FD");
+        drawFlowChart(doc, phase.nodes!, phase.edges ?? [], ML + 3, y + 3, CW - 6, chartH - 6);
+        y += chartH + 3;
+      }
+      y += 8;
     });
 
-    // Flowchart (right column)
-    if (phase.nodes && phase.nodes.length > 0) {
-      const chartY = MT + 26;
-      const chartX = ML + leftW + 6;
-      const chartH = Math.min(phase.actions.length * 7 + 20, 100);
-
-      doc.setFillColor(...C.white);
-      doc.setDrawColor(...C.rule);
-      doc.setLineWidth(0.3);
-      doc.roundedRect(chartX, chartY, rightW, chartH, 2, 2, "FD");
-
-      doc.setFontSize(6.5);
-      doc.setTextColor(...C.light);
-      doc.setFont("helvetica", "normal");
-      doc.text("PHASE WORKFLOW", chartX + rightW / 2, chartY + 5, { align: "center" });
-
-      drawFlowChart(doc, phase.nodes, phase.edges ?? [], chartX + 2, chartY + 8, rightW - 4, chartH - 12);
-    }
-
-    // Vendor questions for tools relevant to this phase (show for all tools on last phase)
-    if (phaseIdx === solution.phases.length - 1) {
-      y = Math.max(y, MT + 26) + 10;
-      if (y < H - 60) {
-        y = sectionLabel(doc, "Vendor Questions — Before You Buy", y);
-        solution.tools.slice(0, 3).forEach((tool) => {
-          if (!tool.vendorQuestions || y > H - 30) return;
-          doc.setFontSize(8.5);
-          doc.setTextColor(...C.dark);
-          doc.setFont("helvetica", "bold");
-          doc.text(tool.name, ML, y);
-          y += 5;
-          tool.vendorQuestions.forEach((q) => {
-            if (y > H - 20) return;
-            doc.setFontSize(7.5);
-            doc.setTextColor(...C.mid);
-            doc.setFont("helvetica", "normal");
-            const qLines = doc.splitTextToSize(`• ${q}`, CW - 4);
-            doc.text(qLines, ML + 2, y);
-            y += qLines.length * 4.5;
-          });
-          y += 4;
+    // Vendor questions follow the plan
+    const toolsWithQs = solution.tools.filter((t) => t.vendorQuestions && t.vendorQuestions.length > 0).slice(0, 3);
+    if (toolsWithQs.length > 0) {
+      flowRoom(40);
+      y = sectionLabel(doc, "Vendor Questions — Before You Buy", y);
+      toolsWithQs.forEach((tool) => {
+        flowRoom(24);
+        doc.setFontSize(8.5);
+        doc.setTextColor(...C.dark);
+        doc.setFont("helvetica", "bold");
+        doc.text(tool.name, ML, y);
+        y += 5;
+        tool.vendorQuestions!.forEach((q) => {
+          flowRoom(12);
+          doc.setFontSize(7.5);
+          doc.setTextColor(...C.mid);
+          doc.setFont("helvetica", "normal");
+          const qLines = doc.splitTextToSize(`- ${q}`, CW - 4) as string[];
+          doc.text(qLines, ML + 2, y);
+          y += qLines.length * 4.3;
         });
-      }
+        y += 4;
+      });
     }
 
     addPageNum(doc, page);
-  });
+  }
 
   // ══════════════════════════════════════════════
   // PAGE — COST OF OWNERSHIP, METRICS & ALTERNATIVE
