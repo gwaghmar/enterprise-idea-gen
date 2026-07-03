@@ -475,6 +475,15 @@ export default function Home() {
   const [elapsed, setElapsed] = useState(0);
   const targetRef = useRef(0);
   const startedAtRef = useRef(0);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-grow the problem box with its content (capped, then scrolls)
+  useEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(144, Math.min(el.scrollHeight + 2, 400))}px`;
+  }, [problem]);
   const [currentStep, setCurrentStep] = useState(0);
   const [stepMessage, setStepMessage] = useState("");
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
@@ -835,10 +844,12 @@ export default function Home() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="relative">
             <textarea
+              ref={taRef}
               value={problem}
               onChange={(e) => setProblem(e.target.value)}
               placeholder="e.g. We need to automate invoice processing and sync it with our CRM..."
-              className="w-full bg-white/5 border border-white/15 rounded-2xl p-5 pb-14 text-white placeholder:text-white/30 resize-none h-36 focus:outline-none focus:border-white/40 text-base transition-colors"
+              className="w-full bg-white/5 border border-white/15 rounded-2xl p-5 pb-14 text-white placeholder:text-white/30 resize-none overflow-y-auto focus:outline-none focus:border-white/40 text-base transition-colors"
+              style={{ height: 144 }}
             />
             <div className="absolute bottom-3 left-3 flex items-center">
               <VoiceButton onTranscript={(t) => setProblem(t)} currentText={problem} />

@@ -84,9 +84,38 @@ export async function POST(req: NextRequest) {
         send(controller, { activity: entry });
       };
       try {
+        // ── Step 0: quick rewrite — sharpen the problem statement ──────────
+        // Users type shorthand; a 2s Haiku pass turns it into a precise brief
+        // so the research and synthesis have more to work with.
+        let refinedProblem = problem;
+        send(controller, { progress: 2, step: 1, message: "Sharpening your problem statement..." });
+        act({ type: "synth", text: "Rewriting your problem statement for sharper research" });
+        try {
+          const t0 = Date.now();
+          const rewrite = await openrouter.chat.completions.create({
+            model: "anthropic/claude-haiku-4-5",
+            max_tokens: 220,
+            temperature: 0.2,
+            messages: [{
+              role: "user",
+              content: `Rewrite this business problem statement so a solutions consultant can act on it: clear, specific, complete sentences. Keep EVERY concrete fact (systems, volumes, teams, pain points) exactly as stated; do not invent facts or numbers; keep it under 90 words; write in first person plural ("We..."). Return ONLY the rewritten statement, no preamble.
+
+PROBLEM: "${problem}"`,
+            }],
+          });
+          const refined = rewrite.choices[0]?.message?.content?.trim();
+          if (refined && refined.length > 20 && refined.length <= 1200) {
+            refinedProblem = refined;
+            act({ type: "synth", text: `Refined brief: "${refined.slice(0, 90)}${refined.length > 90 ? "…" : ""}"` });
+          }
+          log(reqId, "rewrite_done", { ms: Date.now() - t0, used: refinedProblem !== problem });
+        } catch {
+          // Rewrite is best-effort — proceed with the user's original wording
+        }
+
         // ── Step 1: Perplexity — targeted enterprise research ──────────────
         send(controller, { progress: 4, step: 1, message: "Searching for enterprise tools and case studies..." });
-        act({ type: "search", text: `Researching solutions for "${problem.slice(0, 60)}${problem.length > 60 ? "…" : ""}"` });
+        act({ type: "search", text: `Researching solutions for "${refinedProblem.slice(0, 60)}${refinedProblem.length > 60 ? "…" : ""}"` });
         act({ type: "search", text: `Scoping to ${industry} · ${size} · ${stack}` });
         act({ type: "search", text: "Comparing tools, published pricing tiers & real case studies" });
         if (compliance !== "Not specified") {
@@ -101,7 +130,7 @@ export async function POST(req: NextRequest) {
             content: `You are an enterprise technology researcher. Find the best real-world solutions for this specific problem.
 
 COMPANY PROFILE:
-- Problem: "${problem}"
+- Problem: "${refinedProblem}"
 - Industry: ${industry}
 - Company size: ${size}
 - Requesting team: ${team}
@@ -180,7 +209,7 @@ Be specific and concise: name exact products, pricing tiers, integration methods
         const synthesisPrompt = `You are a senior enterprise solution architect with 20 years of experience at McKinsey and Gartner. Build a specific, opinionated solution — not a generic overview. You cover not just WHICH tools, but exactly HOW to get them approved and rolled out inside this specific company.
 
 COMPANY PROFILE:
-- Problem: "${problem}"
+- Problem: "${refinedProblem}"
 - Industry: ${industry}
 - Company size: ${size}
 - Requesting team: ${team}
@@ -414,10 +443,12 @@ Node labels: 3-5 words MAX. Node IDs must be unique (p1_, p2_, p3_ prefixes).`;
 
         send(controller, {
           progress: 100, step: 4, message: "Solution ready", done: true,
-          solution, problem,
+          solution,
+          problem: refinedProblem,       // the brief the report was built from
+          originalProblem: problem,      // the user's own words, kept for reference
           context: { size, stack, budget, timeline, industry, team, seats, techLevel, compliance },
           citations, activity: activityLog,
-          model: "perplexity/sonar-pro → jina (parallel) → claude/sonnet-4-5",
+          model: "haiku (rewrite) → perplexity/sonar-pro → jina (parallel) → claude/sonnet-4-5",
           tokens: totalTokens,
         });
 
