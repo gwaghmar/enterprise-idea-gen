@@ -70,6 +70,60 @@ const INDUSTRIES = [
   "Travel / Hospitality", "Agriculture", "Marketing / Advertising", "Human Resources / Staffing",
 ];
 
+// One-click example problems — real situations enterprise teams hit.
+// Clicking fills the whole form so users can generate immediately.
+interface ExampleProblem {
+  label: string;
+  problem: string;
+  industry: string;
+  size: string;
+  team: string;
+  techLevel: string;
+  stacks: string[];      // must exist in STACKS
+  extraStacks: string[]; // free-form tools
+  budget: string;
+  timeline: string;
+  compliance: string[];
+}
+const EXAMPLES: ExampleProblem[] = [
+  {
+    label: "Invoices are typed in by hand",
+    problem: "Our AP team manually keys supplier invoices from email PDFs into NetSuite. It takes days, creates errors, and month-end close is always late. We want automated invoice capture, approval routing, and posting.",
+    industry: "Manufacturing", size: "SMB", team: "Finance", techLevel: "Some developers",
+    stacks: ["Microsoft 365"], extraStacks: ["NetSuite"], budget: "$500–2k/mo", timeline: "1–3 months", compliance: ["SOC 2"],
+  },
+  {
+    label: "Sales team ignores the CRM",
+    problem: "Reps track deals in spreadsheets and Slack, so Salesforce is always stale and forecasting is guesswork. We need CRM updates to be automatic or effortless so pipeline data is trustworthy.",
+    industry: "SaaS / Software", size: "SMB", team: "Sales", techLevel: "Some developers",
+    stacks: ["Salesforce", "Slack"], extraStacks: [], budget: "$500–2k/mo", timeline: "ASAP", compliance: [],
+  },
+  {
+    label: "Onboarding a hire takes 3 weeks",
+    problem: "Every new hire needs a dozen accounts provisioned manually across our tools. Onboarding takes weeks, steps get missed, and offboarding is worse — accounts stay active after people leave. We want automated provisioning and deprovisioning.",
+    industry: "Consulting / Professional Services", size: "Enterprise", team: "HR", techLevel: "No-code only",
+    stacks: ["Google Workspace", "Slack"], extraStacks: ["Okta"], budget: "$2k+/mo", timeline: "1–3 months", compliance: ["ISO 27001"],
+  },
+  {
+    label: "Support runs out of a shared inbox",
+    problem: "Customer support is a shared Gmail inbox. Response times are 2+ days, nothing is tracked or prioritized, and we have no idea what customers complain about most. We need a real helpdesk with automation and SLAs.",
+    industry: "Retail / E-commerce", size: "Startup", team: "Operations", techLevel: "No-code only",
+    stacks: ["Google Workspace", "Shopify"], extraStacks: [], budget: "< $500/mo", timeline: "ASAP", compliance: [],
+  },
+  {
+    label: "Monthly reports take 3 days to build",
+    problem: "Every month ops exports CSVs from five different systems and stitches the exec dashboard together in Excel. It takes three days, breaks constantly, and nobody trusts the numbers. We want automated reporting with a live dashboard.",
+    industry: "Logistics / Supply Chain", size: "SMB", team: "Operations", techLevel: "Some developers",
+    stacks: ["Microsoft 365", "SAP"], extraStacks: ["Power BI"], budget: "$500–2k/mo", timeline: "1–3 months", compliance: [],
+  },
+  {
+    label: "Contracts get lost in email threads",
+    problem: "Sales contracts are negotiated as email attachments with no visibility into status, versions, or renewal dates — we recently missed an auto-renewal that cost us. We need contract lifecycle management with e-signature and renewal alerts.",
+    industry: "Legal Services", size: "SMB", team: "Legal", techLevel: "No-code only",
+    stacks: ["Google Workspace", "Salesforce"], extraStacks: ["DocuSign"], budget: "$500–2k/mo", timeline: "1–3 months", compliance: ["GDPR"],
+  },
+];
+
 const STEP_LABELS = [
   { step: 1, label: "Web search", icon: "◎" },
   { step: 2, label: "Reading sources", icon: "◎" },
@@ -495,6 +549,21 @@ export default function Home() {
     setStacks((prev) => prev.filter((s) => s !== "Recommend for me"));
   }
 
+  function applyExample(e: ExampleProblem) {
+    setProblem(e.problem);
+    setIndustry(e.industry);
+    setSize(e.size);
+    setTeam(e.team);
+    setTechLevel(e.techLevel);
+    setStacks(e.stacks);
+    setExtraStacks(e.extraStacks);
+    setBudget(e.budget);
+    setTimeline(e.timeline);
+    setCompliance(e.compliance);
+    setError("");
+    setErrorQuip("");
+  }
+
   function toggleCompliance(v: string) {
     if (v === "None / Not sure") {
       setCompliance((prev) => (prev.includes(v) ? [] : ["None / Not sure"]));
@@ -750,16 +819,16 @@ export default function Home() {
             </div>
           )}
           <div className="inline-block bg-white/10 border border-white/20 rounded-full px-4 py-1 text-sm mb-6 text-white/60">
-            Enterprise Solution Generator
+            ERPHigh — AI Solution Architect for your business
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
-            Describe your problem.<br />
-            <span className="text-white/40">Get a full solution.</span>
+            Describe a business problem.<br />
+            <span className="text-white/40">Get the tools, costs & rollout plan.</span>
           </h1>
           <p className="text-white/50 text-lg">
             {FREE_MODE
-              ? "AI researches, reasons, and builds you a visual workflow. Free while in beta — no card, no signup."
-              : "AI researches, reasons, and builds you a visual workflow. Review free — pay $1 only if you like it."}
+              ? "An AI consultant that researches live sources and builds your implementation plan — which tools to buy, what they'll really cost, how to roll them out, and the email to send the vendor. Free while in beta."
+              : "An AI consultant that researches live sources and builds your implementation plan — tools, real costs, rollout steps, and the vendor email. Review free — pay $1 only if you like it."}
           </p>
         </div>
 
@@ -783,6 +852,21 @@ export default function Home() {
                 Clear
               </button>
             )}
+          </div>
+
+          {/* One-click example problems */}
+          <div data-examples className="space-y-2">
+            <p className="text-white/35 text-xs uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> Sound familiar? One click fills everything
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {EXAMPLES.map((e) => (
+                <button key={e.label} type="button" onClick={() => applyExample(e)}
+                  className="px-3.5 py-1.5 rounded-full text-sm border border-white/15 bg-white/5 text-white/55 hover:border-white/40 hover:text-white hover:bg-white/10 transition-all">
+                  {e.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-4 bg-white/3 border border-white/10 rounded-2xl p-5">
