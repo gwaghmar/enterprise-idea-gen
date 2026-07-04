@@ -1,6 +1,21 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
+import { put } from "@vercel/blob";
 import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
+
+// Checkpoint saved after each expensive pipeline stage so a dropped
+// connection can resume instead of re-buying research and synthesis
+interface Ckpt {
+  stage: "research" | "synthesis";
+  refinedProblem: string;
+  searchContent: string;
+  communityContent: string;
+  docsContent: string;
+  sourceContent: string;
+  citations: string[];
+  sourceMeta: Record<string, string>;
+  fullContent?: string;
+}
 
 const encoder = new TextEncoder();
 
@@ -40,6 +55,7 @@ export async function POST(req: NextRequest) {
   let body: {
     problem?: string; size?: string; stack?: string; budget?: string; timeline?: string;
     industry?: string; team?: string; seats?: string; techLevel?: string; compliance?: string;
+    runId?: string;
   };
   try {
     body = await req.json();
@@ -76,6 +92,32 @@ export async function POST(req: NextRequest) {
     apiKey: process.env.OPENROUTER_API_KEY!,
   });
 
+  // Checkpointing (best-effort, requires Blob): the client sends a runId; we
+  // save progress after research and after synthesis so a retry with the same
+  // runId skips whatever already finished.
+  const runId = typeof body.runId === "string" && /^[a-z0-9-]{8,64}$/i.test(body.runId) ? body.runId : null;
+  const ckptPath = runId ? `checkpoints/${runId}.json` : null;
+  const saveCkpt = async (data: Ckpt) => {
+    if (!ckptPath || !process.env.BLOB_READ_WRITE_TOKEN) return;
+    try {
+      await put(ckptPath, JSON.stringify(data), { access: "public", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" });
+      log(reqId, "ckpt_saved", { stage: data.stage });
+    } catch (e) {
+      console.error(JSON.stringify({ reqId, step: "ckpt_save_failed", error: String(e).slice(0, 150) }));
+    }
+  };
+  const loadCkpt = async (): Promise<Ckpt | null> => {
+    if (!ckptPath) return null;
+    try {
+      const r = await fetch(`https://blob.vercel-storage.com/${ckptPath}`, { cache: "no-store" });
+      if (!r.ok) return null;
+      const c = await r.json();
+      return c && typeof c.stage === "string" && typeof c.refinedProblem === "string" ? c : null;
+    } catch {
+      return null;
+    }
+  };
+
   const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 
   const stream = new ReadableStream({
@@ -87,10 +129,19 @@ export async function POST(req: NextRequest) {
         send(controller, { activity: entry });
       };
       try {
+        const tStart = Date.now();
+        // Resume? Restore whatever a previous run of this runId already finished
+        const ckpt = await loadCkpt();
+        if (ckpt) {
+          log(reqId, "resume", { stage: ckpt.stage });
+          act({ type: "found", text: ckpt.stage === "synthesis" ? "Recovered your finished draft — skipping research and writing" : "Recovered your research — skipping straight to writing" });
+        }
+
         // ── Step 0: quick rewrite — sharpen the problem statement ──────────
         // Users type shorthand; a 2s Haiku pass turns it into a precise brief
         // so the research and synthesis have more to work with.
-        let refinedProblem = problem;
+        let refinedProblem = ckpt?.refinedProblem ?? problem;
+        if (!ckpt) {
         send(controller, { progress: 2, step: 1, message: "Sharpening your problem statement..." });
         act({ type: "synth", text: "Rewriting your problem statement for sharper research" });
         try {
@@ -115,9 +166,21 @@ PROBLEM: "${problem}"`,
         } catch {
           // Rewrite is best-effort — proceed with the user's original wording
         }
+        } // end !ckpt (rewrite)
 
         // ── Step 1: research fan-out — vendor, community, and docs angles in
         // parallel (same wall-clock as one call, three perspectives) ────────
+        let searchContent = ckpt?.searchContent ?? "";
+        let communityContent = ckpt?.communityContent ?? "";
+        let docsContent = ckpt?.docsContent ?? "";
+        let sourceContent = ckpt?.sourceContent ?? "";
+        const sourceMeta: Record<string, string> = ckpt?.sourceMeta ?? {};
+        const citations: string[] = ckpt?.citations ?? [];
+        let searchUsageTokens = 0;
+        if (ckpt) {
+          send(controller, { progress: 44, step: 3, message: "Research recovered — resuming...", citations, done: false });
+          citations.slice(0, 10).forEach((url) => act({ type: "source", text: `${hostOf(url)} (${sourceMeta[url]})`, url }));
+        } else {
         send(controller, { progress: 4, step: 1, message: "Searching the web from three angles..." });
         act({ type: "search", text: `Researching solutions for "${refinedProblem.slice(0, 60)}${refinedProblem.length > 60 ? "…" : ""}"` });
         act({ type: "search", text: `Scoping to ${industry} · ${size} · ${stack}` });
@@ -183,9 +246,10 @@ Report, concisely:
 
         if (vendorR.status === "rejected") throw new Error("Research failed — please try again");
         const searchResult = vendorR.value;
-        const searchContent = searchResult.choices[0].message.content || "";
-        const communityContent = communityR.status === "fulfilled" ? (communityR.value.choices[0].message.content || "") : "";
-        const docsContent = docsR.status === "fulfilled" ? (docsR.value.choices[0].message.content || "") : "";
+        searchUsageTokens = searchResult.usage?.total_tokens ?? 0;
+        searchContent = searchResult.choices[0].message.content || "";
+        communityContent = communityR.status === "fulfilled" ? (communityR.value.choices[0].message.content || "") : "";
+        docsContent = docsR.status === "fulfilled" ? (docsR.value.choices[0].message.content || "") : "";
         // OpenRouter surfaces Perplexity sources in different fields depending on
         // version: top-level `citations`, `search_results`, or per-message
         // `annotations`. Check all of them, then fall back to URLs in the text.
@@ -207,8 +271,6 @@ Report, concisely:
         /* eslint-enable @typescript-eslint/no-explicit-any */
 
         // Merge + dedupe, remembering where each source came from
-        const sourceMeta: Record<string, string> = {};
-        const citations: string[] = [];
         const addCit = (urls: string[], kind: string, cap: number) => {
           urls.slice(0, cap).forEach((u) => {
             if (!citations.includes(u)) { citations.push(u); sourceMeta[u] = kind; }
@@ -235,7 +297,6 @@ Report, concisely:
         }
 
         // ── Step 2: Jina — parallel source reading (skip if no citations) ──
-        let sourceContent = "";
         if (citations.length > 0) {
           // Read a MIX of angles, not just the top vendor pages
           const topUrls = [
@@ -266,6 +327,9 @@ Report, concisely:
         } else {
           send(controller, { progress: 42, step: 2, message: "Proceeding with research findings" });
         }
+
+        await saveCkpt({ stage: "research", refinedProblem, searchContent, communityContent, docsContent, sourceContent, citations, sourceMeta });
+        } // end !ckpt (research + reading)
 
         // ── Step 3: Claude Sonnet — structured solution synthesis ──────────
         send(controller, { progress: 45, step: 3, message: "Claude synthesizing your solution..." });
@@ -447,15 +511,7 @@ STRICT JSON: output raw JSON only — no markdown fences, no commentary. Inside 
 
 Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the actual system, team, or deliverable (e.g. "Provision Workato sandbox", "Parallel-run invoices"). Generic labels like "Kickoff", "Configure", "Validate", "Go live" are BANNED, and no two phases may share the same node labels. Node IDs must be unique (p1_, p2_, p3_ prefixes).`;
 
-        const synthesisStream = await openrouter.chat.completions.create({
-          model: "anthropic/claude-sonnet-4-5",
-          stream: true,
-          max_tokens: 8000,
-          messages: [{ role: "user", content: synthesisPrompt }],
-          temperature: 0.3,
-        });
-
-        let fullContent = "";
+        let fullContent = ckpt?.stage === "synthesis" && ckpt.fullContent ? ckpt.fullContent : "";
         let tokenCount = 0;
 
         // Narrate the report as its sections stream out AND push each
@@ -488,25 +544,40 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           try { return (JSON.parse(`{${slice}}`) as Record<string, unknown>)[key]; } catch { return undefined; }
         };
 
-        for await (const chunk of synthesisStream) {
-          const delta = chunk.choices[0]?.delta?.content || "";
-          fullContent += delta;
-          tokenCount++;
-          if (tokenCount % 10 === 0) {
-            // ~4800 tokens for a full report → map onto 45..95
-            const progress = 45 + Math.min(50, Math.floor((tokenCount / 4800) * 50));
-            send(controller, { progress, step: 3, message: "Writing your report..." });
-            while (narrIdx < SECTIONS.length && fullContent.includes(`"${SECTIONS[narrIdx].key}"`)) {
-              if (SECTIONS[narrIdx].narr) act({ type: "synth", text: SECTIONS[narrIdx].narr! });
-              narrIdx++;
-            }
-            // A section is complete once the key AFTER it has appeared
-            while (partIdx + 1 < narrIdx) {
-              const value = extractSection(fullContent, SECTIONS[partIdx].key, SECTIONS[partIdx + 1].key);
-              if (value !== undefined) send(controller, { partial: { key: SECTIONS[partIdx].key, value } });
-              partIdx++;
+        if (fullContent) {
+          // Resumed with a finished draft — skip the 2-minute write entirely
+          send(controller, { progress: 92, step: 4, message: "Recovered your draft — finalizing..." });
+        } else {
+          const synthesisStream = await openrouter.chat.completions.create({
+            model: "anthropic/claude-sonnet-4-5",
+            stream: true,
+            max_tokens: 8000,
+            messages: [{ role: "user", content: synthesisPrompt }],
+            temperature: 0.3,
+          });
+
+          for await (const chunk of synthesisStream) {
+            const delta = chunk.choices[0]?.delta?.content || "";
+            fullContent += delta;
+            tokenCount++;
+            if (tokenCount % 10 === 0) {
+              // ~4800 tokens for a full report → map onto 45..95
+              const progress = 45 + Math.min(50, Math.floor((tokenCount / 4800) * 50));
+              send(controller, { progress, step: 3, message: "Writing your report..." });
+              while (narrIdx < SECTIONS.length && fullContent.includes(`"${SECTIONS[narrIdx].key}"`)) {
+                if (SECTIONS[narrIdx].narr) act({ type: "synth", text: SECTIONS[narrIdx].narr! });
+                narrIdx++;
+              }
+              // A section is complete once the key AFTER it has appeared
+              while (partIdx + 1 < narrIdx) {
+                const value = extractSection(fullContent, SECTIONS[partIdx].key, SECTIONS[partIdx + 1].key);
+                if (value !== undefined) send(controller, { partial: { key: SECTIONS[partIdx].key, value } });
+                partIdx++;
+              }
             }
           }
+
+          await saveCkpt({ stage: "synthesis", refinedProblem, searchContent, communityContent, docsContent, sourceContent, citations, sourceMeta, fullContent });
         }
 
         log(reqId, "claude_done", { ms: Date.now() - t3, tokens: tokenCount, contentLen: fullContent.length });
@@ -586,9 +657,9 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           }
         }
 
-        const totalTokens = (searchResult.usage?.total_tokens ?? 0) + tokenCount;
+        const totalTokens = searchUsageTokens + tokenCount;
         act({ type: "done", text: "Solution assembled and ready" });
-        log(reqId, "complete", { totalTokens, totalMs: Date.now() - t1 });
+        log(reqId, "complete", { totalTokens, totalMs: Date.now() - tStart });
 
         send(controller, {
           progress: 100, step: 4, message: "Solution ready", done: true,

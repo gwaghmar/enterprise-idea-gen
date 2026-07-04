@@ -492,6 +492,7 @@ export default function Home() {
   const targetRef = useRef(0);
   const startedAtRef = useRef(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const runIdRef = useRef<string | null>(null);
 
   // Auto-grow the problem box with its content (capped, then scrolls)
   useEffect(() => {
@@ -624,6 +625,10 @@ export default function Home() {
   // resume=true keeps the already-streamed preview on screen so a retry after
   // a dropped connection feels like continuing, not starting over
   async function runGeneration(resume: boolean) {
+    // Same runId across resumes lets the server skip completed stages
+    if (!resume || !runIdRef.current) {
+      runIdRef.current = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)).replace(/[^a-z0-9-]/gi, "").slice(0, 36);
+    }
     setLoading(true);
     setProgress(1);
     setSmoothProgress(1);
@@ -657,6 +662,7 @@ export default function Home() {
       seats: seats.trim(),
       techLevel,
       compliance: compliance.join(", ") || "Not specified",
+      runId: runIdRef.current,
     };
 
     try {
