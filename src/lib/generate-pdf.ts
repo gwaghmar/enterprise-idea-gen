@@ -262,6 +262,29 @@ export async function generatePDF(
   doc.setTextColor(200, 210, 225);
   const sLines = doc.splitTextToSize(solution.summary, CW - 4);
   doc.text(sLines, ML + 4, py);
+  py += sLines.length * 5.5 + 14;
+
+  // Headline stats — evaluated count belongs on the cover
+  const coverStats = [
+    solution.evaluated?.length ? { n: `${solution.evaluated.length}`, l: "SOLUTIONS EVALUATED" } : null,
+    { n: `${solution.tools.length}`, l: "TOOLS RECOMMENDED" },
+    solution.phases.length ? { n: `${solution.phases.length}`, l: "ROLLOUT PHASES" } : null,
+    citations.length ? { n: `${citations.length}`, l: "SOURCES RESEARCHED" } : null,
+  ].filter(Boolean) as { n: string; l: string }[];
+  if (coverStats.length) {
+    const statW = (CW - 4) / coverStats.length;
+    coverStats.forEach((st, i) => {
+      const sx = ML + 4 + i * statW;
+      doc.setFontSize(22);
+      doc.setTextColor(96, 165, 250);
+      doc.setFont("helvetica", "bold");
+      doc.text(st.n, sx, py + 6);
+      doc.setFontSize(6.5);
+      doc.setTextColor(...C.light);
+      doc.setFont("helvetica", "normal");
+      doc.text(st.l, sx, py + 12);
+    });
+  }
 
   // Context grid (bottom section) — every profile field the user gave us
   const ctxItems = [
@@ -532,7 +555,7 @@ export async function generatePDF(
   }
 
   if (solution.phases.length > 0) {
-    newFlowPage();
+    if (y > H - 110) newFlowPage(); else y += 8;
     toc.push({ label: "Implementation plan & vendor questions", page });
     y = sectionLabel(doc, "Implementation Plan", y);
 
@@ -558,15 +581,12 @@ export async function generatePDF(
       const hasChart = !!(phase.nodes && phase.nodes.length > 0);
       const chartH = 26;
 
-      // Estimate the block height so a phase never splits across pages
+      // Keep the header + objective together; everything after flows piece
+      // by piece so page bottoms actually get used
       doc.setFontSize(8);
-      let estH = 12 + (hasChart ? chartH + 5 : 0);
-      if (phase.objective) estH += (doc.splitTextToSize(phase.objective, CW - 12) as string[]).length * 4 + 2;
-      phase.actions.forEach((a) => {
-        estH += (doc.splitTextToSize(a, CW - 8) as string[]).length * 4.6 + 2;
-      });
-      if (phase.exitCriteria?.length) estH += 6 + phase.exitCriteria.length * 4.4;
-      flowRoom(estH + 14);
+      let headH = 14;
+      if (phase.objective) headH += (doc.splitTextToSize(phase.objective, CW - 12) as string[]).length * 4 + 2;
+      flowRoom(headH + 12);
 
       // Phase badge + title
       doc.setFillColor(...C.accent);
@@ -594,6 +614,7 @@ export async function generatePDF(
 
       // Actions (full width)
       phase.actions.forEach((action) => {
+        flowRoom(14);
         doc.setFontSize(8);
         doc.setTextColor(...C.accent);
         doc.setFont("helvetica", "bold");
@@ -607,6 +628,7 @@ export async function generatePDF(
 
       // Exit criteria — when this phase counts as done
       if (phase.exitCriteria && phase.exitCriteria.length > 0) {
+        flowRoom(10 + phase.exitCriteria.length * 5);
         y += 1;
         doc.setFontSize(6.8);
         doc.setTextColor(5, 150, 105);
@@ -626,6 +648,7 @@ export async function generatePDF(
 
       // Flowchart below the actions, full width — nodes render large enough to read
       if (hasChart) {
+        flowRoom(chartH + 8);
         y += 2;
         doc.setFillColor(...C.white);
         doc.setDrawColor(...C.rule);
