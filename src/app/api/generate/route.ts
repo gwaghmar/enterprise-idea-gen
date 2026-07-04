@@ -186,10 +186,24 @@ Report, concisely:
         const searchContent = searchResult.choices[0].message.content || "";
         const communityContent = communityR.status === "fulfilled" ? (communityR.value.choices[0].message.content || "") : "";
         const docsContent = docsR.status === "fulfilled" ? (docsR.value.choices[0].message.content || "") : "";
+        // OpenRouter surfaces Perplexity sources in different fields depending on
+        // version: top-level `citations`, `search_results`, or per-message
+        // `annotations`. Check all of them, then fall back to URLs in the text.
         /* eslint-disable @typescript-eslint/no-explicit-any */
-        const vendorCit: string[] = (searchResult as any).citations ?? [];
-        const communityCit: string[] = communityR.status === "fulfilled" ? ((communityR.value as any).citations ?? []) : [];
-        const docsCit: string[] = docsR.status === "fulfilled" ? ((docsR.value as any).citations ?? []) : [];
+        const extractCitations = (resp: any, content: string): string[] => {
+          const urls: string[] = [];
+          const push = (u: unknown) => { if (typeof u === "string" && u.startsWith("http") && !urls.includes(u)) urls.push(u); };
+          (resp?.citations ?? []).forEach(push);
+          (resp?.search_results ?? []).forEach((r: any) => push(r?.url));
+          (resp?.choices?.[0]?.message?.annotations ?? []).forEach((a: any) => push(a?.url_citation?.url ?? a?.url));
+          if (urls.length === 0) (content.match(/https?:\/\/[^\s)\]"'<>,]+/g) ?? []).forEach(push);
+          return urls;
+        };
+        const vendorCit = extractCitations(searchResult, searchContent);
+        const communityCit = communityR.status === "fulfilled" ? extractCitations(communityR.value, communityContent) : [];
+        const docsCit = docsR.status === "fulfilled" ? extractCitations(docsR.value, docsContent) : [];
+        if (communityR.status === "rejected") console.error(JSON.stringify({ reqId, step: "research_community_failed", error: String(communityR.reason).slice(0, 200) }));
+        if (docsR.status === "rejected") console.error(JSON.stringify({ reqId, step: "research_docs_failed", error: String(docsR.reason).slice(0, 200) }));
         /* eslint-enable @typescript-eslint/no-explicit-any */
 
         // Merge + dedupe, remembering where each source came from
@@ -429,6 +443,8 @@ Return ONLY valid JSON, no markdown, no explanation:
   "showHoursRoi": true
 }
 
+STRICT JSON: output raw JSON only — no markdown fences, no commentary. Inside every string value, escape double quotes as \\" and avoid literal newlines (use \\n). One malformed character breaks the entire pipeline.
+
 Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the actual system, team, or deliverable (e.g. "Provision Workato sandbox", "Parallel-run invoices"). Generic labels like "Kickoff", "Configure", "Validate", "Go live" are BANNED, and no two phases may share the same node labels. Node IDs must be unique (p1_, p2_, p3_ prefixes).`;
 
         const synthesisStream = await openrouter.chat.completions.create({
@@ -504,27 +520,69 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           return JSON.parse(text.slice(start, end + 1));
         }
 
+        // Last-resort local repair: cut back to the last complete element before
+        // the syntax error and close whatever is open. Loses trailing fields but
+        // saves the report without another model call.
+        // Close any open string/brackets so a truncated document parses
+        function balance(s: string) {
+          let inStr = false, esc = false;
+          const stack: string[] = [];
+          for (const ch of s) {
+            if (esc) { esc = false; continue; }
+            if (ch === "\\") { esc = true; continue; }
+            if (ch === '"') { inStr = !inStr; continue; }
+            if (inStr) continue;
+            if (ch === "{" || ch === "[") stack.push(ch);
+            else if (ch === "}" || ch === "]") stack.pop();
+          }
+          let out = s.replace(/,\s*$/, "");
+          if (inStr) out += '"';
+          return out + stack.reverse().map((c) => (c === "{" ? "}" : "]")).join("");
+        }
+        function salvageJson(text: string) {
+          const start = text.indexOf("{");
+          let s = text.slice(start).replace(/\s*`{1,3}(json)?\s*$/, "");
+          for (let i = 0; i < 50; i++) {
+            try { return JSON.parse(balance(s)); } catch (e) {
+              // Cut back to the last complete element before the error and retry
+              const m = /position (\d+)/.exec(String(e));
+              const p = m ? Math.min(Number(m[1]), s.length) : s.length;
+              const cut = Math.max(s.lastIndexOf(",", p - 1), s.lastIndexOf("[", p - 1), s.lastIndexOf("{", p - 1));
+              if (cut <= 0) break;
+              s = s.slice(0, cut);
+            }
+          }
+          throw new Error("salvage failed");
+        }
+
         let solution;
         try {
           solution = tryParse(fullContent);
         } catch (parseErr) {
-          // One retry — re-run the synthesis non-streamed before giving up
+          // Don't re-run the whole 2-minute synthesis (that's how we hit the 300s
+          // timeout) — have Haiku fix the malformed JSON in place, which keeps
+          // every section and takes ~15-40s.
           console.error(JSON.stringify({ reqId, step: "json_parse_failed", attempt: 1, contentLen: fullContent.length, preview: fullContent.slice(0, 300), error: String(parseErr) }));
-          send(controller, { progress: 97, step: 4, message: "Refining the solution..." });
+          send(controller, { progress: 97, step: 4, message: "Repairing the report format..." });
           try {
-            const retry = await openrouter.chat.completions.create({
-              model: "anthropic/claude-sonnet-4-5",
-              max_tokens: 8000,
-              messages: [{ role: "user", content: synthesisPrompt }],
-              temperature: 0.2,
+            const repair = await openrouter.chat.completions.create({
+              model: "anthropic/claude-haiku-4-5",
+              max_tokens: 16000,
+              messages: [{ role: "user", content: `The following is a JSON document with a syntax error (${String(parseErr).slice(0, 120)}). Output the corrected JSON and NOTHING else — no commentary, no markdown fences. Fix only the syntax (unescaped quotes, missing commas/brackets); do not change any content.\n\n${fullContent}` }],
+              temperature: 0,
             });
-            solution = tryParse(retry.choices[0].message.content || "");
-            log(reqId, "json_retry_ok", {});
-          } catch (retryErr) {
-            console.error(JSON.stringify({ reqId, step: "json_parse_failed", attempt: 2, error: String(retryErr) }));
-            send(controller, { progress: 100, done: true, error: "AI returned an incomplete response. Please try again." });
-            controller.close();
-            return;
+            solution = tryParse(repair.choices[0].message.content || "");
+            log(reqId, "json_repair_ok", { via: "haiku" });
+          } catch (repairErr) {
+            console.error(JSON.stringify({ reqId, step: "json_repair_failed", error: String(repairErr) }));
+            try {
+              solution = salvageJson(fullContent);
+              log(reqId, "json_repair_ok", { via: "salvage" });
+            } catch {
+              send(controller, { progress: 100, done: true, error: "AI returned an incomplete response. Please try again." });
+              controller.close();
+              return;
+            }
           }
         }
 
