@@ -342,6 +342,9 @@ function MultiCombobox({ options, selected, onAdd, onRemove, placeholder }: {
   function add(v: string) {
     onAdd(v);
     setQuery("");
+    // Close after adding — an open full-catalog dropdown covers the fields
+    // below; typing again reopens it for the next pick
+    setOpen(false);
   }
 
   return (
