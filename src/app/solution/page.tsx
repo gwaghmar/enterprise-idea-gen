@@ -389,7 +389,7 @@ export default function SolutionPage() {
     setSid(data.sid ?? null);
     setPaidReal(Boolean(data.paid) || isPaid(data.sid));
     setUnlocked(FREE_MODE || Boolean(data.paid) || isPaid(data.sid));
-    if (data.solution?.title) document.title = `${data.solution.title} — ERPHigh`;
+    if (data.solution?.title) document.title = `${data.solution.title} — PilotPlan`;
     setModel(data.model ?? "");
     setTokens(data.tokens ?? null);
   }, [router]);
@@ -438,7 +438,7 @@ export default function SolutionPage() {
     if (!solution) return;
     setEmailing(true);
     const url = await ensureShareUrl();
-    const subject = encodeURIComponent(`Your ERPHigh report: ${solution.title}`);
+    const subject = encodeURIComponent(`Your PilotPlan report: ${solution.title}`);
     const body = encodeURIComponent(
       `${solution.title}\n\n${solution.summary}\n\n` +
       (url ? `Open the full report: ${url}\n\n` : "") +

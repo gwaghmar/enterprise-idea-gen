@@ -13,14 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ERPHigh — Enterprise Solution Generator",
-  description: "AI researches, reasons, and builds you a visual enterprise workflow. Review free, pay $1 only if you like it.",
-  metadataBase: new URL("https://erphigh.vercel.app"),
+  title: "PilotPlan — AI Solution Architect for your business",
+  description: "Describe your business problem. AI researches real tools, prices, and community feedback, then builds a step-by-step pilot plan you can hand to your team. Free.",
+  metadataBase: new URL("https://pilotplan.vercel.app"),
   openGraph: {
-    title: "ERPHigh — Enterprise Solution Generator",
-    description: "AI researches, reasons, and builds you a visual enterprise workflow.",
-    url: "https://erphigh.vercel.app",
-    siteName: "ERPHigh",
+    title: "PilotPlan — AI Solution Architect for your business",
+    description: "Describe your business problem. AI researches real tools and prices, then builds a step-by-step pilot plan.",
+    url: "https://pilotplan.vercel.app",
+    siteName: "PilotPlan",
   },
 };
 

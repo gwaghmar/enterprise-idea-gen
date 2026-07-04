@@ -15,14 +15,14 @@ async function loadShared(id: string) {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const data = await loadShared(id);
-  const title = data?.solution?.title ?? "Shared solution — ERPHigh";
+  const title = data?.solution?.title ?? "Shared solution — PilotPlan";
   const description =
     data?.solution?.summary?.slice(0, 180) ??
     "An AI-researched implementation plan: tools, costs, and rollout steps.";
   return {
-    title: `${title} — ERPHigh`,
+    title: `${title} — PilotPlan`,
     description,
-    openGraph: { title, description, siteName: "ERPHigh" },
+    openGraph: { title, description, siteName: "PilotPlan" },
     twitter: { card: "summary_large_image", title, description },
   };
 }
