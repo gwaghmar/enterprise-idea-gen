@@ -986,6 +986,11 @@ export default function Home() {
                 onRemove={(v) => setExtraStacks((prev) => prev.filter((s) => s !== v))}
                 placeholder="Search any other tool — NetSuite, Workday, Zendesk… or type your own"
               />
+              {stacks.includes("Recommend for me") && (
+                <p className="text-white/35 text-xs">
+                  The AI will pick the best-fit tools with no assumptions about what you already run — recommendations won&apos;t be constrained to integrate with an existing stack.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <p className="text-white/40 text-xs uppercase tracking-wider">Monthly budget</p>
