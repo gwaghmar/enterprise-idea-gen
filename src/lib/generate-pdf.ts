@@ -15,6 +15,7 @@ interface Kpi { metric: string; baseline?: string; target: string; timeframe?: s
 interface AdoptionStep { title: string; detail: string; }
 interface Solution {
   title: string; insight?: string; summary: string; tools: Tool[]; assumptions?: string[];
+  evaluated?: { name: string; verdict: string; reason: string }[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
   rolloutPlaybook?: { stakeholders?: Stakeholder[]; tickets?: Ticket[] };
   approvals?: { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[] };
@@ -315,6 +316,9 @@ export async function generatePDF(
   doc.setFillColor(...C.bgLight);
   doc.rect(0, 0, W, H, "F");
 
+  const numbered = new Set<number>();
+  const pageNum = (n: number) => { if (numbered.has(n)) return; numbered.add(n); addPageNum(doc, n); };
+
   let y = MT;
 
   // Header bar
@@ -429,6 +433,24 @@ export async function generatePDF(
     y += 30;
   }
 
+  // Candidates evaluated — one compact line each; rejected options build trust
+  if (solution.evaluated && solution.evaluated.length > 0) {
+    doc.setFontSize(6.8);
+    doc.setTextColor(...C.accent);
+    doc.setFont("helvetica", "bold");
+    doc.text(`SOLUTIONS EVALUATED — ${solution.evaluated.length} REAL CANDIDATES ASSESSED AGAINST YOUR SCENARIO`, ML, y + 1);
+    y += 4.5;
+    solution.evaluated.slice(0, 8).forEach((c) => {
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", c.verdict === "chosen" ? "bold" : "normal");
+      doc.setTextColor(...(c.verdict === "chosen" ? C.dark : C.mid));
+      const line = doc.splitTextToSize(`${c.verdict === "chosen" ? "[+]" : "[-]"} ${c.name} — ${c.reason}`, CW - 4) as string[];
+      doc.text(line.slice(0, 2), ML + 2, y + 1);
+      y += Math.min(line.length, 2) * 3.9 + 0.8;
+    });
+    y += 4;
+  }
+
   // Assumptions the AI made — flag them honestly
   if (solution.assumptions && solution.assumptions.length > 0) {
     doc.setFontSize(6.8);
@@ -456,7 +478,7 @@ export async function generatePDF(
       ? (doc.splitTextToSize(`Why for you: ${tool.whyForYou}`, CW - 10) as string[]).slice(0, 3)
       : [];
     const cardH = 9 + purposeLines.length * 3.9 + (whyLines.length ? whyLines.length * 3.7 + 2.5 : 0) + 3;
-    if (y + cardH > H - 22) { addPageNum(doc, page); doc.addPage(); page++; y = MT + 10; doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F"); }
+    if (y + cardH > H - 22) { pageNum(page); doc.addPage(); page++; y = MT + 10; doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F"); }
 
     doc.setFillColor(...C.white);
     doc.setDrawColor(...C.rule);
@@ -485,13 +507,13 @@ export async function generatePDF(
     y += cardH + 3;
   });
 
-  addPageNum(doc, page);
+  pageNum(page);
 
   // ══════════════════════════════════════════════
   // PAGE(S) — IMPLEMENTATION PLAN (phases flow continuously)
   // ══════════════════════════════════════════════
   function newFlowPage() {
-    addPageNum(doc, page);
+    pageNum(page);
     doc.addPage();
     page++;
     doc.setFillColor(...C.bgLight);
@@ -640,7 +662,7 @@ export async function generatePDF(
       });
     }
 
-    addPageNum(doc, page);
+    pageNum(page);
   }
 
   // ══════════════════════════════════════════════
@@ -655,18 +677,25 @@ export async function generatePDF(
     (kpis && kpis.length) || (adoption && adoption.length) || (alt && alt.name);
 
   if (hasCostPage) {
-    doc.addPage(); page++;
+    // Flow onto the current page when at least a third of it is free —
+    // hard page breaks were leaving reports full of half-empty pages
+    if (y > H - 110) {
+      pageNum(page);
+      doc.addPage(); page++;
+      doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F");
+      doc.setFillColor(...C.accent); doc.rect(0, 0, W, 1.5, "F");
+      y = MT;
+      doc.setFontSize(8); doc.setTextColor(...C.light); doc.setFont("helvetica", "normal");
+      doc.text(solution.title.toUpperCase(), ML, y + 4);
+      y += 12;
+    } else {
+      y += 8;
+    }
     toc.push({ label: "Total cost of ownership, metrics & Option B", page });
-    doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F");
-    doc.setFillColor(...C.accent); doc.rect(0, 0, W, 1.5, "F");
-    y = MT;
-    doc.setFontSize(8); doc.setTextColor(...C.light); doc.setFont("helvetica", "normal");
-    doc.text(solution.title.toUpperCase(), ML, y + 4);
-    y += 12;
 
     function roomCost(needed: number) {
       if (y > H - needed) {
-        addPageNum(doc, page);
+        pageNum(page);
         doc.addPage(); page++;
         doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F");
         doc.setFillColor(...C.accent); doc.rect(0, 0, W, 1.5, "F");
@@ -762,7 +791,7 @@ export async function generatePDF(
       if (alt.tradeoff) y = wrapText(doc, `Tradeoff: ${alt.tradeoff}`, ML, y + 1, CW, 7.5, C.mid, "italic");
     }
 
-    addPageNum(doc, page);
+    pageNum(page);
   }
 
   // ══════════════════════════════════════════════
@@ -777,24 +806,28 @@ export async function generatePDF(
     (vo && (vo.howToReach || vo.email || (vo.demoChecklist && vo.demoChecklist.length)));
 
   if (hasRollout) {
-    doc.addPage();
-    page++;
+    if (y > H - 110) {
+      pageNum(page);
+      doc.addPage();
+      page++;
+      doc.setFillColor(...C.bgLight);
+      doc.rect(0, 0, W, H, "F");
+      doc.setFillColor(...C.accent);
+      doc.rect(0, 0, W, 1.5, "F");
+      y = MT;
+      doc.setFontSize(8);
+      doc.setTextColor(...C.light);
+      doc.setFont("helvetica", "normal");
+      doc.text(solution.title.toUpperCase(), ML, y + 4);
+      y += 12;
+    } else {
+      y += 8;
+    }
     toc.push({ label: "Internal rollout, approvals & vendor outreach", page });
-    doc.setFillColor(...C.bgLight);
-    doc.rect(0, 0, W, H, "F");
-    doc.setFillColor(...C.accent);
-    doc.rect(0, 0, W, 1.5, "F");
-
-    y = MT;
-    doc.setFontSize(8);
-    doc.setTextColor(...C.light);
-    doc.setFont("helvetica", "normal");
-    doc.text(solution.title.toUpperCase(), ML, y + 4);
-    y += 12;
 
     function ensureRoom(needed: number) {
       if (y > H - needed) {
-        addPageNum(doc, page);
+        pageNum(page);
         doc.addPage(); page++;
         doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F");
         doc.setFillColor(...C.accent); doc.rect(0, 0, W, 1.5, "F");
@@ -908,22 +941,27 @@ export async function generatePDF(
       }
     }
 
-    addPageNum(doc, page);
+    pageNum(page);
   }
 
   // ══════════════════════════════════════════════
   // FINAL PAGE — SOURCES & APPENDIX
   // ══════════════════════════════════════════════
   if (citations.length > 0) {
-    doc.addPage();
-    page++;
-    doc.setFillColor(...C.bgLight);
-    doc.rect(0, 0, W, H, "F");
-    doc.setFillColor(...C.accent);
-    doc.rect(0, 0, W, 1.5, "F");
-
+    const srcNeeded = 14 + Math.min(citations.length, 12) * 6;
+    if (y > H - srcNeeded - 20) {
+      pageNum(page);
+      doc.addPage();
+      page++;
+      doc.setFillColor(...C.bgLight);
+      doc.rect(0, 0, W, H, "F");
+      doc.setFillColor(...C.accent);
+      doc.rect(0, 0, W, 1.5, "F");
+      y = MT + 10;
+    } else {
+      y += 8;
+    }
     toc.push({ label: "Research sources", page });
-    y = MT + 10;
     y = sectionLabel(doc, "Research Sources", y);
     citations.forEach((url, i) => {
       if (y > H - 20) return;
@@ -935,7 +973,7 @@ export async function generatePDF(
       y += 6;
     });
 
-    addPageNum(doc, page);
+    pageNum(page);
   }
 
   // Backfill a compact one-line contents strip onto page 2 now that page

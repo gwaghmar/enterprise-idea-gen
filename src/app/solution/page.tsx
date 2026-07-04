@@ -87,12 +87,13 @@ interface Tco { lineItems?: TcoLineItem[]; oneTimeSetup?: string; monthlyRecurri
 interface Kpi { metric: string; baseline?: string; target: string; timeframe?: string; }
 interface AdoptionStep { title: string; detail: string; }
 interface Alternative { name: string; summary: string; tools?: string[]; estimatedCost?: string; tradeoff?: string; }
+interface Evaluated { name: string; verdict: string; reason: string; }
 interface Solution {
   title: string; insight?: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
   rolloutPlaybook?: RolloutPlaybook; approvals?: Approvals; vendorOutreach?: VendorOutreach;
   tco?: Tco; kpis?: Kpi[]; adoptionPlan?: AdoptionStep[]; alternative?: Alternative;
-  assumptions?: string[]; showHoursRoi?: boolean;
+  assumptions?: string[]; showHoursRoi?: boolean; evaluated?: Evaluated[];
 }
 interface Context {
   size: string; stack: string; budget: string; timeline: string;
@@ -431,14 +432,29 @@ export default function SolutionPage() {
   }
 
   async function handleEmailMe() {
-    if (!solution) return;
+    if (!solution || !context) return;
     setEmailing(true);
+    // mailto can't attach files — download the PDF alongside the draft so the
+    // user can drop it in (the body tells them it's in Downloads)
+    try {
+      const { generatePDF } = await import("@/lib/generate-pdf");
+      await generatePDF(solution, problem, context, citations, roiData ?? undefined);
+    } catch { /* PDF is a bonus — the email still works without it */ }
     const url = await ensureShareUrl();
-    const subject = encodeURIComponent(`Your PilotPlan report: ${solution.title}`);
+    const evalCount = solution.evaluated?.length ?? 0;
+    const firstYear = solution.tco?.firstYearTotal ?? solution.estimatedCost;
+    const subject = encodeURIComponent(`Implementation plan: ${solution.title}`);
     const body = encodeURIComponent(
-      `${solution.title}\n\n${solution.summary}\n\n` +
-      (url ? `Open the full report: ${url}\n\n` : "") +
-      `Est. cost: ${solution.estimatedCost}\nTimeline: ${solution.timeToImplement}`
+      `Hi,\n\nHere's the implementation plan for: ${problem.slice(0, 160)}\n\n` +
+      `RECOMMENDATION\n${solution.title} — ${solution.summary}\n\n` +
+      `KEY NUMBERS\n` +
+      `- First-year total: ${firstYear}\n` +
+      `- Timeline: ${solution.timeToImplement}\n` +
+      `- Tools: ${solution.tools.map((t) => t.name).join(", ")}\n` +
+      (evalCount ? `- Candidates evaluated: ${evalCount}\n` : "") +
+      (url ? `\nFull interactive report: ${url}\n` : "") +
+      `\nThe PDF version was just downloaded to this device — attach it to this email before sending.\n\n` +
+      `Generated with PilotPlan (pilotplan.vercel.app)`
     );
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
     setEmailing(false);
@@ -706,6 +722,28 @@ export default function SolutionPage() {
                   </ul>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Candidates evaluated — the rejected options build trust in the picks */}
+        {solution.evaluated && solution.evaluated.length > 0 && (
+          <div data-evaluated className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Solutions Evaluated</h2>
+            <p className="text-white/40 text-sm mb-4">{solution.evaluated.length} real candidates assessed against your stack, budget, and team — here&apos;s why each won or lost.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {solution.evaluated.map((c, i) => (
+                <div key={i} className={`rounded-xl border px-4 py-3 ${c.verdict === "chosen" ? "border-blue-500/30 bg-blue-500/5" : "border-white/10 bg-white/3"}`}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    {c.verdict === "chosen"
+                      ? <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                      : <Circle className="w-3.5 h-3.5 text-white/25 shrink-0" />}
+                    <span className="text-sm font-medium text-white">{c.name}</span>
+                    <span className={`ml-auto text-[10px] uppercase tracking-wider ${c.verdict === "chosen" ? "text-blue-400" : "text-white/30"}`}>{c.verdict}</span>
+                  </div>
+                  <p className="text-white/50 text-xs">{c.reason}</p>
+                </div>
+              ))}
             </div>
           </div>
         )}
