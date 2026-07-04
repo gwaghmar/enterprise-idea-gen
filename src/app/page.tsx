@@ -883,7 +883,7 @@ export default function Home() {
             </div>
           )}
           <div className="inline-block bg-white/10 border border-white/20 rounded-full px-4 py-1 text-sm mb-6 text-white/60">
-            ERPHigh — AI Solution Architect for your business
+            PilotPlan — AI Solution Architect for your business
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
             Describe a business problem.<br />

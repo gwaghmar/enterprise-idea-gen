@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "ERPHigh implementation plan";
+export const alt = "PilotPlan implementation plan";
 
 async function loadShared(id: string) {
   try {
@@ -35,7 +35,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
       >
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ fontSize: 26, color: "#93a4c8", letterSpacing: 3, marginBottom: 28 }}>
-            ERPHIGH · IMPLEMENTATION PLAN
+            PILOTPLAN · IMPLEMENTATION PLAN
           </div>
           <div style={{ fontSize: 62, fontWeight: 700, lineHeight: 1.15, maxWidth: 1000 }}>
             {title.length > 90 ? `${title.slice(0, 90)}…` : title}
@@ -60,7 +60,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
               <div style={{ fontSize: 40, fontWeight: 700 }}>{time.slice(0, 26)}</div>
             </div>
           ) : null}
-          <div style={{ marginLeft: "auto", fontSize: 26, color: "#93a4c8" }}>erphigh.vercel.app</div>
+          <div style={{ marginLeft: "auto", fontSize: 26, color: "#93a4c8" }}>pilotplan.vercel.app</div>
         </div>
       </div>
     ),
