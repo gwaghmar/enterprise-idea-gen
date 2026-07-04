@@ -53,7 +53,10 @@ export async function POST(req: NextRequest) {
     typeof v === "string" && v.trim() ? v.trim().slice(0, max) : fallback;
   const problem = typeof body.problem === "string" ? body.problem.trim().slice(0, 1200) : "";
   const size = field(body.size, 40);
-  const stack = field(body.stack, 400);
+  const rawStack = field(body.stack, 400);
+  // "Recommend for me" is the UI's no-stack sentinel — turn it into a real instruction
+  const stack = rawStack.replace(/Recommend for me,?\s*/g, "").trim() ||
+    "no existing stack constraints — recommend the objectively best-fit tools";
   const budget = field(body.budget, 40);
   const timeline = field(body.timeline, 40);
   const industry = field(body.industry, 80);
