@@ -836,6 +836,11 @@ export default function Home() {
               <Sparkles className="w-3.5 h-3.5" /> Your report so far
             </p>
             {preview.title && <h2 className="text-xl font-bold text-white mb-1">{preview.title}</h2>}
+            {Array.isArray(preview.evaluated) && preview.evaluated.length > 0 && (
+              <p data-evaluated className="text-blue-400/90 text-xs font-medium mb-2">
+                {preview.evaluated.length} candidate solutions evaluated against your scenario
+              </p>
+            )}
             {preview.insight && <p className="text-white/55 text-sm italic mb-2">{preview.insight}</p>}
             {preview.summary && <p className="text-white/60 text-sm mb-3">{preview.summary}</p>}
             {Array.isArray(preview.tools) && preview.tools.length > 0 && (
