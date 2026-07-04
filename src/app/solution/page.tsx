@@ -100,13 +100,9 @@ interface Context {
 }
 interface SelectedItem { label: string; itemType: string; }
 
+// Geist-style: categories are metadata, not a rainbow — one quiet chip style
 const categoryColors: Record<string, string> = {
-  Integration: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  Automation: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-  CRM: "bg-green-500/20 text-green-300 border-green-500/30",
-  Analytics: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-  Storage: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-  default: "bg-white/10 text-white/60 border-white/20",
+  default: "bg-white/[0.06] text-white/60 border-white/10",
 };
 
 // ─── Explain Popup ────────────────────────────────────────────────────────────
@@ -272,7 +268,7 @@ function ROICalculator({ estimatedCost }: { estimatedCost: string }) {
           ].map((m) => (
             <div key={m.label} className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
               <p className="text-white/40 text-xs mb-1">{m.label}</p>
-              <p className={`text-lg font-bold ${m.highlight ? "text-emerald-400" : "text-white"}`}>{m.value}</p>
+              <p className={`text-lg font-bold ${m.highlight ? "text-blue-400" : "text-white"}`}>{m.value}</p>
               <p className="text-white/25 text-xs mt-0.5">{m.sub}</p>
             </div>
           ))}
@@ -647,7 +643,7 @@ export default function SolutionPage() {
                     "Vendor outreach kit with ready-to-send email",
                     "PDF export of the complete report",
                   ].map((f) => (
-                    <li key={f} className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400/80 shrink-0" />{f}</li>
+                    <li key={f} className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-white/40 shrink-0" />{f}</li>
                   ))}
                 </ul>
                 <button onClick={handleApprove} disabled={paying}
@@ -696,7 +692,7 @@ export default function SolutionPage() {
                 ].filter((m) => m.value).map((m) => (
                   <div key={m.label} className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
                     <p className="text-white/40 text-xs mb-1">{m.label}</p>
-                    <p className={`font-bold text-base ${m.highlight ? "text-emerald-400" : "text-white"}`}>{m.value}</p>
+                    <p className={`font-bold text-base ${m.highlight ? "text-blue-400" : "text-white"}`}>{m.value}</p>
                   </div>
                 ))}
               </div>
@@ -831,11 +827,11 @@ export default function SolutionPage() {
                       </ul>
                       {phase.exitCriteria && phase.exitCriteria.length > 0 && (
                         <div className="mt-4 border-t border-white/8 pt-3">
-                          <p className="text-emerald-400/70 text-xs uppercase tracking-wider mb-2">Done when</p>
+                          <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Done when</p>
                           <ul className="space-y-1.5">
                             {phase.exitCriteria.map((c, j) => (
                               <li key={j} className="flex items-start gap-2 text-sm text-white/60">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400/60 shrink-0 mt-0.5" />
+                                <CheckCircle2 className="w-3.5 h-3.5 text-white/30 shrink-0 mt-0.5" />
                                 <span>{c}</span>
                               </li>
                             ))}
@@ -876,7 +872,7 @@ export default function SolutionPage() {
                   <div className="flex items-center gap-2 text-sm">
                     {k.baseline && <span className="text-white/40 line-through">{k.baseline}</span>}
                     {k.baseline && <ArrowRight className="w-3.5 h-3.5 text-white/30 shrink-0" />}
-                    <span className="text-emerald-400 font-semibold">{k.target}</span>
+                    <span className="text-blue-400 font-semibold">{k.target}</span>
                   </div>
                   {k.timeframe && <p className="text-white/35 text-xs mt-2 flex items-center gap-1.5"><Target className="w-3.5 h-3.5" /> {k.timeframe}</p>}
                 </div>
