@@ -498,7 +498,7 @@ export default function Home() {
     const el = taRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.max(144, Math.min(el.scrollHeight + 2, 400))}px`;
+    el.style.height = `${Math.max(120, Math.min(el.scrollHeight + 2, 400))}px`;
   }, [problem]);
   const [currentStep, setCurrentStep] = useState(0);
   const [stepMessage, setStepMessage] = useState("");
@@ -508,13 +508,15 @@ export default function Home() {
   const [preview, setPreview] = useState<Record<string, any>>({});
   const [error, setError] = useState("");
   const [errorQuip, setErrorQuip] = useState("");
+  const [resumable, setResumable] = useState(false);
   const [factIdx, setFactIdx] = useState(0);
   const [hasHistory, setHasHistory] = useState(false);
   const router = useRouter();
 
-  function showError(message: string, kind: ErrorKind) {
+  function showError(message: string, kind: ErrorKind, canResume = false) {
     setError(message);
     setErrorQuip(quipFor(kind));
+    setResumable(canResume);
     setLoading(false);
   }
 
@@ -546,6 +548,13 @@ export default function Home() {
   }, [loading]);
 
   useEffect(() => { setHasHistory(listHistory().length > 0); }, []);
+
+  // After a failed run the user lands back on the form — bring the error
+  // (and its Continue button) into view instead of leaving them at the top
+  useEffect(() => {
+    if (!error) return;
+    setTimeout(() => document.querySelector("[data-error]")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  }, [error]);
 
   // Desktop/Android notification when the report finishes while the tab is
   // in the background (generation takes a minute — people switch tabs)
@@ -609,7 +618,12 @@ export default function Home() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isReady) return;
+    await runGeneration(false);
+  }
 
+  // resume=true keeps the already-streamed preview on screen so a retry after
+  // a dropped connection feels like continuing, not starting over
+  async function runGeneration(resume: boolean) {
     setLoading(true);
     setProgress(1);
     setSmoothProgress(1);
@@ -618,10 +632,11 @@ export default function Home() {
     setCurrentStep(1);
     setCompletedSteps([]);
     setActivityFeed([]);
-    setPreview({});
-    setStepMessage("Starting...");
+    if (!resume) setPreview({});
+    setStepMessage(resume ? "Reconnecting — picking up your report..." : "Starting...");
     setError("");
     setErrorQuip("");
+    setResumable(false);
 
     // Ask for notification permission on the submit gesture (browsers require
     // a user action) so we can ping them when the report is ready
@@ -697,7 +712,7 @@ export default function Home() {
             if (data.done) {
               gotDone = true;
               if (data.error) {
-                showError(data.error, "ai");
+                showError(data.error, "ai", true);
                 notifyIfHidden("Generation failed", "Something went wrong — come back and try again.");
               } else {
                 setProgress(100);
@@ -741,11 +756,11 @@ export default function Home() {
       // Stream ended without a done event (server timeout / dropped
       // connection) — without this the loading screen hung forever
       if (!gotDone) {
-        showError("The report took too long or the connection dropped. Please try again — it usually works on a second run.", "timeout");
+        showError("The report took too long or the connection dropped.", "timeout", true);
         notifyIfHidden("Generation didn't finish", "The report timed out — come back and try again.");
       }
     } catch {
-      showError("Couldn't reach the server. Check your connection and try again.", "network");
+      showError("Couldn't reach the server. Check your connection.", "network", true);
     }
   }
 
@@ -897,27 +912,29 @@ export default function Home() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="relative">
+          {/* Controls live BELOW the text, not overlaid on it — text can never
+              run underneath the mic button (it did on iOS) */}
+          <div className="bg-white/5 border border-white/15 rounded-2xl focus-within:border-white/40 transition-colors">
             <textarea
               ref={taRef}
               value={problem}
               onChange={(e) => setProblem(e.target.value)}
               placeholder="e.g. We need to automate invoice processing and sync it with our CRM..."
-              className="w-full bg-white/5 border border-white/15 rounded-2xl p-5 pb-14 text-white placeholder:text-white/30 resize-none overflow-y-auto focus:outline-none focus:border-white/40 text-base transition-colors"
-              style={{ height: 144 }}
+              className="w-full bg-transparent p-5 pb-2 text-white placeholder:text-white/30 resize-none overflow-y-auto focus:outline-none text-base"
+              style={{ height: 120 }}
             />
-            <div className="absolute bottom-3 left-3 flex items-center">
+            <div className="flex items-center justify-between px-3 pb-3">
               <VoiceButton onTranscript={(t) => setProblem(t)} currentText={problem} />
+              {problem && (
+                <button
+                  type="button"
+                  onClick={() => setProblem("")}
+                  className="text-white/30 hover:text-white/60 text-xs px-2 py-1 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
             </div>
-            {problem && (
-              <button
-                type="button"
-                onClick={() => setProblem("")}
-                className="absolute bottom-3 right-3 text-white/30 hover:text-white/60 text-xs px-2 py-1 transition-colors"
-              >
-                Clear
-              </button>
-            )}
           </div>
 
           {/* One-click example problems */}
@@ -1019,9 +1036,26 @@ export default function Home() {
           </div>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-4 py-3 space-y-1">
-              <p className="text-red-400 text-sm">{error}</p>
-              {errorQuip && <p data-quip className="text-white/40 text-xs italic">{errorQuip}</p>}
+            <div data-error className={`rounded-xl px-4 py-3 space-y-2 border ${resumable ? "bg-blue-500/10 border-blue-500/25" : "bg-red-500/10 border-red-500/25"}`}>
+              {resumable ? (
+                <>
+                  <p className="text-white text-sm font-medium">Looks like the connection hiccuped — don&apos;t worry, your solution is saved and almost complete.</p>
+                  <p className="text-white/50 text-xs">{error}</p>
+                  {errorQuip && <p data-quip className="text-white/40 text-xs italic">{errorQuip}</p>}
+                  <button
+                    type="button"
+                    onClick={() => runGeneration(true)}
+                    className="w-full bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl py-3 text-sm transition-colors"
+                  >
+                    Continue where we left off
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-red-400 text-sm">{error}</p>
+                  {errorQuip && <p data-quip className="text-white/40 text-xs italic">{errorQuip}</p>}
+                </>
+              )}
             </div>
           )}
 
