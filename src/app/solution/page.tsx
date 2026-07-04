@@ -69,7 +69,7 @@ const FlowChart = dynamic(() => import("@/components/FlowChart"), { ssr: false }
 
 interface Tool {
   name: string; purpose: string; category: string;
-  whyForYou: string; vendorQuestions?: string[];
+  whyForYou: string; vendorQuestions?: string[]; sourceUrl?: string;
 }
 interface FlowNode { id: string; label: string; type: string; }
 interface FlowEdge { from: string; to: string; label?: string; }
@@ -92,6 +92,7 @@ interface Solution {
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
   rolloutPlaybook?: RolloutPlaybook; approvals?: Approvals; vendorOutreach?: VendorOutreach;
   tco?: Tco; kpis?: Kpi[]; adoptionPlan?: AdoptionStep[]; alternative?: Alternative;
+  assumptions?: string[]; showHoursRoi?: boolean;
 }
 interface Context {
   size: string; stack: string; budget: string; timeline: string;
@@ -327,6 +328,9 @@ export default function SolutionPage() {
   const [problem, setProblem] = useState("");
   const [context, setContext] = useState<Context | null>(null);
   const [citations, setCitations] = useState<string[]>([]);
+  const [sourceMeta, setSourceMeta] = useState<Record<string, string>>({});
+  const [remixing, setRemixing] = useState<string | null>(null);
+  const [emailing, setEmailing] = useState(false);
   const [activity, setActivity] = useState<{ type: string; text: string; url?: string }[]>([]);
   const [activityFocus, setActivityFocus] = useState<string | null>(null);
   const [showActivity, setShowActivity] = useState(false);
@@ -380,6 +384,7 @@ export default function SolutionPage() {
     setProblem(data.problem);
     setContext(data.context ?? null);
     setCitations(data.citations ?? []);
+    setSourceMeta(data.sourceMeta ?? {});
     setActivity(data.activity ?? []);
     setSid(data.sid ?? null);
     setPaidReal(Boolean(data.paid) || isPaid(data.sid));
@@ -403,9 +408,8 @@ export default function SolutionPage() {
     setShareUrl(null); // invalidate any prior share link — content changed
   }
 
-  async function handleShare() {
-    if (shareUrl) { navigator.clipboard.writeText(shareUrl); return; }
-    setSharing(true);
+  async function ensureShareUrl(): Promise<string | null> {
+    if (shareUrl) return shareUrl;
     try {
       const res = await fetch("/api/share", {
         method: "POST",
@@ -416,10 +420,52 @@ export default function SolutionPage() {
       if (data.id) {
         const url = `${window.location.origin}/share/${data.id}`;
         setShareUrl(url);
-        navigator.clipboard.writeText(url);
+        return url;
       }
-    } catch { /* silently fail */ }
-    finally { setSharing(false); }
+    } catch { /* not configured */ }
+    return null;
+  }
+
+  async function handleShare() {
+    if (shareUrl) { navigator.clipboard.writeText(shareUrl); return; }
+    setSharing(true);
+    const url = await ensureShareUrl();
+    if (url) navigator.clipboard.writeText(url);
+    setSharing(false);
+  }
+
+  async function handleEmailMe() {
+    if (!solution) return;
+    setEmailing(true);
+    const url = await ensureShareUrl();
+    const subject = encodeURIComponent(`Your ERPHigh report: ${solution.title}`);
+    const body = encodeURIComponent(
+      `${solution.title}\n\n${solution.summary}\n\n` +
+      (url ? `Open the full report: ${url}\n\n` : "") +
+      `Est. cost: ${solution.estimatedCost}\nTimeline: ${solution.timeToImplement}`
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    setEmailing(false);
+  }
+
+  const REMIXES: { key: string; label: string; instruction: string }[] = [
+    { key: "cheaper", label: "Make it cheaper", instruction: "Rework this solution to cost significantly less: prefer cheaper tiers, open-source or existing-stack options, and cut nice-to-haves. Update tools, costs, TCO, phases and the alternative accordingly. Keep the same problem and quality bar." },
+    { key: "faster", label: "Make it faster", instruction: "Compress this plan to deliver value in half the time: fewer tools, self-serve setup where possible, aggressive but realistic phase timelines. Update phases, exit criteria, costs and rollout accordingly." },
+    { key: "enterprise", label: "More enterprise-grade", instruction: "Upgrade this solution for a stricter enterprise environment: stronger compliance and security controls, SSO everywhere, vendor SLAs, formal change management. Update tools, approvals, risks, TCO and phases accordingly." },
+  ];
+
+  async function handleRemix(r: { key: string; instruction: string }) {
+    if (!solution || remixing) return;
+    setRemixing(r.key);
+    try {
+      const res = await fetch("/api/edit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ solution, instruction: r.instruction }),
+      });
+      const data = await res.json();
+      if (res.ok && data.solution) handleSolutionEdit(data.solution);
+    } catch { /* leave the report as-is */ }
+    finally { setRemixing(null); }
   }
 
   async function handleExport() {
@@ -481,6 +527,10 @@ export default function SolutionPage() {
             <a href="/history" className="text-white/40 text-sm hover:text-white/70 transition-colors flex items-center gap-1.5"><History className="w-4 h-4" /> My solutions</a>
           </div>
           <div className="flex gap-2">
+            <button onClick={handleEmailMe} disabled={emailing}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm border border-white/15 text-white/60 hover:text-white hover:border-white/30 disabled:opacity-50 transition-all">
+              <Mail className="w-3.5 h-3.5" /> {emailing ? "Preparing..." : "Email me"}
+            </button>
             <button onClick={handleShare} disabled={sharing}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm border border-white/15 text-white/60 hover:text-white hover:border-white/30 disabled:opacity-50 transition-all">
               {sharing ? "Saving..." : shareUrl ? "Link copied!" : "Share"}
@@ -504,6 +554,19 @@ export default function SolutionPage() {
           </div>
         )}
 
+        {/* Remix — one-click re-plans via the edit endpoint */}
+        <div className="flex flex-wrap items-center gap-2 mb-8">
+          <span className="text-white/35 text-xs uppercase tracking-wider mr-1 flex items-center gap-1.5"><Wand2 className="w-3.5 h-3.5" /> Remix</span>
+          {REMIXES.map((r) => (
+            <button key={r.key} onClick={() => handleRemix(r)} disabled={!!remixing}
+              className="px-3.5 py-1.5 rounded-full text-sm border border-white/15 bg-white/5 text-white/55 hover:border-white/40 hover:text-white disabled:opacity-40 transition-all">
+              {remixing === r.key ? (
+                <span className="flex items-center gap-2"><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Reworking…</span>
+              ) : r.label}
+            </button>
+          ))}
+        </div>
+
         {/* Problem */}
         <div className="mb-6">
           <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Your problem</p>
@@ -526,8 +589,8 @@ export default function SolutionPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             {[
               { label: "Est. Monthly Cost", value: solution.estimatedCost },
+              { label: "First-Year Total", value: solution.tco?.firstYearTotal ?? `${solution.tools.length} tools` },
               { label: "Time to Implement", value: solution.timeToImplement },
-              { label: "Tools Recommended", value: `${solution.tools.length} tools` },
               { label: "Implementation Phases", value: `${solution.phases.length} phases` },
             ].map((m) => (
               <div key={m.label} className="text-center">
@@ -536,13 +599,35 @@ export default function SolutionPage() {
               </div>
             ))}
           </div>
-          <p className="text-white/60 text-sm leading-relaxed border-t border-white/10 pt-4">{solution.summary}</p>
         </div>
 
-        {/* ROI Calculator */}
-        <div className="mb-12">
-          <ROICalculator estimatedCost={solution.estimatedCost} />
-        </div>
+        {/* Assumptions — the AI's honest guesses, each fixable */}
+        {solution.assumptions && solution.assumptions.length > 0 && (
+          <div className="mb-12 bg-yellow-500/5 border border-yellow-500/20 rounded-2xl p-5">
+            <p className="text-yellow-400/80 text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5" /> We assumed — correct anything that&apos;s off
+            </p>
+            <ul className="mt-3 space-y-2">
+              {solution.assumptions.map((a, i) => (
+                <li key={i}>
+                  <button onClick={() => pick(a, "Assumption")}
+                    className="w-full text-left flex items-start gap-2 text-sm text-white/65 hover:text-white transition-colors group">
+                    <span className="text-yellow-500/50 shrink-0 mt-0.5">•</span>
+                    <span>{a}</span>
+                    <span className="ml-auto shrink-0 text-xs text-white/25 group-hover:text-white/60 transition-colors flex items-center gap-1"><Wand2 className="w-3 h-3" /> fix</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* ROI Calculator — hidden when the problem isn't hours-based */}
+        {solution.showHoursRoi !== false && (
+          <div className="mb-12">
+            <ROICalculator estimatedCost={solution.estimatedCost} />
+          </div>
+        )}
 
         {/* Unlock banner — the implementation kit sits behind the $1 */}
         {!unlocked && (
@@ -640,7 +725,17 @@ export default function SolutionPage() {
                 <div key={i} className="bg-white/5 border border-white/10 rounded-xl overflow-hidden transition-all hover:border-white/20">
                   <button onClick={() => pick(tool.name, "Tool")} className="w-full p-4 text-left space-y-2 group">
                     <div className="flex items-start justify-between gap-2">
-                      <span className="font-semibold text-white">{tool.name}</span>
+                      <span className="font-semibold text-white flex items-center gap-2">
+                        {tool.name}
+                        {safeHttpUrl(tool.sourceUrl) && (
+                          <a href={safeHttpUrl(tool.sourceUrl)!} target="_blank" rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()} title={`Source: ${faviconDomain(tool.sourceUrl!)}`}
+                            className="opacity-60 hover:opacity-100 transition-opacity">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={`https://www.google.com/s2/favicons?domain=${faviconDomain(tool.sourceUrl!)}&sz=64`} alt="source" width={14} height={14} className="w-3.5 h-3.5 rounded" />
+                          </a>
+                        )}
+                      </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${colorClass}`}>{tool.category}</span>
                     </div>
                     <p className="text-white/50 text-sm">{tool.purpose}</p>
@@ -1003,7 +1098,16 @@ export default function SolutionPage() {
                       className="w-5 h-5 rounded shrink-0 bg-white/10"
                       onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
                     <div className="min-w-0">
-                      <p className="text-sm text-white/80 group-hover:text-white truncate">{host}</p>
+                      <p className="text-sm text-white/80 group-hover:text-white truncate flex items-center gap-2">
+                        {host}
+                        {sourceMeta[url] && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border shrink-0 ${
+                            sourceMeta[url] === "community" ? "border-orange-500/40 text-orange-300/80"
+                            : sourceMeta[url] === "docs" ? "border-blue-500/40 text-blue-300/80"
+                            : "border-white/20 text-white/40"
+                          }`}>{sourceMeta[url]}</span>
+                        )}
+                      </p>
                       <p className="text-xs text-white/35 truncate">{url.replace(/^https?:\/\//, "")}</p>
                     </div>
                     {activity.length > 0 && <span className="ml-auto text-white/25 group-hover:text-white/60 text-xs transition-colors shrink-0">trace</span>}

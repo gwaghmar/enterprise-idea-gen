@@ -57,9 +57,16 @@ const STACK_CATALOG = [
   "Workday HCM", "BambooHR", "Gusto", "ADP", "Rippling", "Deel",
   "Coupa", "SAP Ariba", "Ironclad", "LinkSquares",
 ];
-const BUDGETS = ["< $500/mo", "$500–2k/mo", "$2k+/mo"];
+// Budget tiers scale with company size — "$2k+" gives the AI zero signal
+// on an enterprise program that might be $200k/mo
+const BUDGETS_BY_SIZE: Record<string, string[]> = {
+  Startup: ["< $500/mo", "$500–2k/mo", "$2k+/mo"],
+  SMB: ["< $500/mo", "$500–2k/mo", "$2k–10k/mo", "$10k+/mo"],
+  Enterprise: ["< $10k/mo", "$10–50k/mo", "$50k+/mo", "Help me size it"],
+};
+const DEFAULT_BUDGETS = BUDGETS_BY_SIZE.Startup;
 const TIMELINES = ["ASAP", "1–3 months", "3–6 months"];
-const TEAMS = ["Finance", "Operations", "Marketing", "Sales", "IT / Eng", "HR", "Product", "Legal"];
+const TEAMS = ["Executive / Strategy", "Finance", "Operations", "Marketing", "Sales", "IT / Eng", "HR", "Product", "Legal"];
 const TECH_LEVELS = ["No-code only", "Some developers", "Full eng team"];
 const COMPLIANCE = ["GDPR", "HIPAA", "SOC 2", "PCI-DSS", "ISO 27001", "None / Not sure"];
 const INDUSTRIES = [
@@ -86,6 +93,12 @@ interface ExampleProblem {
   compliance: string[];
 }
 const EXAMPLES: ExampleProblem[] = [
+  {
+    label: "CEO wants AI everywhere — no plan",
+    problem: "The CEO has mandated AI adoption across the whole company — engineering, operations, supply chain, sales, support, HR. Right now everyone experiments with ChatGPT individually: no governance, no priorities, and security is worried about data leaks. We need a company-wide AI adoption plan: where to start, which tools, how to govern them, and how to show measurable ROI to the board within two quarters.",
+    industry: "Manufacturing", size: "Enterprise", team: "Executive / Strategy", techLevel: "Some developers",
+    stacks: ["Microsoft 365", "Slack", "Azure"], extraStacks: ["Netskope"], budget: "$10–50k/mo", timeline: "3–6 months", compliance: ["SOC 2", "GDPR"],
+  },
   {
     label: "Invoices are typed in by hand",
     problem: "Our AP team manually keys supplier invoices from email PDFs into NetSuite. It takes days, creates errors, and month-end close is always late. We want automated invoice capture, approval routing, and posting.",
@@ -491,6 +504,8 @@ export default function Home() {
   const [stepMessage, setStepMessage] = useState("");
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [activityFeed, setActivityFeed] = useState<{ type: string; text: string; url?: string }[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [preview, setPreview] = useState<Record<string, any>>({});
   const [error, setError] = useState("");
   const [errorQuip, setErrorQuip] = useState("");
   const [factIdx, setFactIdx] = useState(0);
@@ -603,6 +618,7 @@ export default function Home() {
     setCurrentStep(1);
     setCompletedSteps([]);
     setActivityFeed([]);
+    setPreview({});
     setStepMessage("Starting...");
     setError("");
     setErrorQuip("");
@@ -663,6 +679,8 @@ export default function Home() {
             // Live feed events are {activity: {...}}; the final done payload also
             // carries the full trace as {activity: [...]} — don't swallow that one.
             if (data.activity && !data.done) { setActivityFeed((prev) => [...prev, data.activity]); continue; }
+            // Completed report sections stream in as partials for the live preview
+            if (data.partial && !data.done) { setPreview((prev) => ({ ...prev, [data.partial.key]: data.partial.value })); continue; }
             setProgress(data.progress ?? 0);
             if (data.message) setStepMessage(data.message);
             if (data.step) {
@@ -734,7 +752,8 @@ export default function Home() {
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-3xl grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+        <div className="w-full max-w-3xl space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
         <div className="w-full max-w-sm mx-auto text-center space-y-10">
           <ProgressRing progress={smoothProgress} elapsed={elapsed} />
 
@@ -814,6 +833,39 @@ export default function Home() {
             <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[#0a0a0a] to-transparent pointer-events-none rounded-b-2xl" />
           </div>
         </div>
+        </div>
+
+        {/* Live report preview — sections appear the moment they're written */}
+        {(preview.title || preview.tools || preview.phases) && (
+          <div data-preview className="bg-white/3 border border-white/10 rounded-2xl p-5 animate-in fade-in text-left">
+            <p className="text-emerald-400/70 text-xs uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> Your report so far
+            </p>
+            {preview.title && <h2 className="text-xl font-bold text-white mb-1">{preview.title}</h2>}
+            {preview.insight && <p className="text-white/55 text-sm italic mb-2">{preview.insight}</p>}
+            {preview.summary && <p className="text-white/60 text-sm mb-3">{preview.summary}</p>}
+            {Array.isArray(preview.tools) && preview.tools.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {preview.tools.map((t: any, i: number) => (
+                  <span key={i} className="text-xs bg-white/8 border border-white/15 rounded-full px-3 py-1 text-white/60">{t?.name}</span>
+                ))}
+              </div>
+            )}
+            {Array.isArray(preview.phases) && preview.phases.length > 0 && (
+              <ul className="space-y-1">
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {preview.phases.map((p: any, i: number) => (
+                  <li key={i} className="flex items-center gap-2 text-sm text-white/55">
+                    <span className="w-4 h-4 rounded-full bg-white/10 text-white/60 text-[10px] flex items-center justify-center shrink-0">{i + 1}</span>
+                    {p?.title}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {preview.estimatedCost && <p className="text-emerald-400/80 text-sm font-medium mt-3">{preview.estimatedCost}</p>}
+          </div>
+        )}
         </div>
       </div>
     );
@@ -898,7 +950,11 @@ export default function Home() {
             </div>
             <div className="space-y-2">
               <p className="text-white/40 text-xs uppercase tracking-wider">Company size</p>
-              <Chips options={SIZES} selected={size} onSelect={setSize} />
+              <Chips options={SIZES} selected={size} onSelect={(v) => {
+                setSize(v);
+                // Budget tiers change with size — clear a selection that no longer exists
+                if (budget && !(BUDGETS_BY_SIZE[v] ?? DEFAULT_BUDGETS).includes(budget)) setBudget("");
+              }} />
             </div>
             <div className="space-y-2">
               <p className="text-white/40 text-xs uppercase tracking-wider">Requesting team</p>
@@ -933,7 +989,7 @@ export default function Home() {
             </div>
             <div className="space-y-2">
               <p className="text-white/40 text-xs uppercase tracking-wider">Monthly budget</p>
-              <Chips options={BUDGETS} selected={budget} onSelect={setBudget} />
+              <Chips options={size ? BUDGETS_BY_SIZE[size] ?? DEFAULT_BUDGETS : DEFAULT_BUDGETS} selected={budget} onSelect={setBudget} />
             </div>
             <div className="space-y-2">
               <p className="text-white/40 text-xs uppercase tracking-wider">Timeline</p>
