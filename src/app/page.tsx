@@ -25,20 +25,17 @@ const STACKS = [
   "Google Workspace",
   "Microsoft 365",
   "Salesforce",
-  "HubSpot",
   "Slack",
-  "Notion",
   "Jira / Atlassian",
   "AWS",
   "Azure",
   "SAP",
-  "Shopify",
-  "Stripe",
   "Recommend for me",
 ];
 // Searchable catalog for the stack autocomplete — anything not listed can be
 // typed and added as a custom entry
 const STACK_CATALOG = [
+  "HubSpot", "Notion", "Shopify", "Stripe",
   "NetSuite", "Oracle ERP", "Workday", "QuickBooks", "Xero", "Zoho", "Sage",
   "Monday.com", "Asana", "Trello", "ClickUp", "Airtable", "Smartsheet", "Basecamp",
   "Zendesk", "Freshdesk", "Intercom", "ServiceNow", "PagerDuty",
@@ -110,30 +107,6 @@ const EXAMPLES: ExampleProblem[] = [
     problem: "Reps track deals in spreadsheets and Slack, so Salesforce is always stale and forecasting is guesswork. We need CRM updates to be automatic or effortless so pipeline data is trustworthy.",
     industry: "SaaS / Software", size: "SMB", team: "Sales", techLevel: "Some developers",
     stacks: ["Salesforce", "Slack"], extraStacks: [], budget: "$500–2k/mo", timeline: "ASAP", compliance: [],
-  },
-  {
-    label: "Onboarding a hire takes 3 weeks",
-    problem: "Every new hire needs a dozen accounts provisioned manually across our tools. Onboarding takes weeks, steps get missed, and offboarding is worse — accounts stay active after people leave. We want automated provisioning and deprovisioning.",
-    industry: "Consulting / Professional Services", size: "Enterprise", team: "HR", techLevel: "No-code only",
-    stacks: ["Google Workspace", "Slack"], extraStacks: ["Okta"], budget: "$2k+/mo", timeline: "1–3 months", compliance: ["ISO 27001"],
-  },
-  {
-    label: "Support runs out of a shared inbox",
-    problem: "Customer support is a shared Gmail inbox. Response times are 2+ days, nothing is tracked or prioritized, and we have no idea what customers complain about most. We need a real helpdesk with automation and SLAs.",
-    industry: "Retail / E-commerce", size: "Startup", team: "Operations", techLevel: "No-code only",
-    stacks: ["Google Workspace", "Shopify"], extraStacks: [], budget: "< $500/mo", timeline: "ASAP", compliance: [],
-  },
-  {
-    label: "Monthly reports take 3 days to build",
-    problem: "Every month ops exports CSVs from five different systems and stitches the exec dashboard together in Excel. It takes three days, breaks constantly, and nobody trusts the numbers. We want automated reporting with a live dashboard.",
-    industry: "Logistics / Supply Chain", size: "SMB", team: "Operations", techLevel: "Some developers",
-    stacks: ["Microsoft 365", "SAP"], extraStacks: ["Power BI"], budget: "$500–2k/mo", timeline: "1–3 months", compliance: [],
-  },
-  {
-    label: "Contracts get lost in email threads",
-    problem: "Sales contracts are negotiated as email attachments with no visibility into status, versions, or renewal dates — we recently missed an auto-renewal that cost us. We need contract lifecycle management with e-signature and renewal alerts.",
-    industry: "Legal Services", size: "SMB", team: "Legal", techLevel: "No-code only",
-    stacks: ["Google Workspace", "Salesforce"], extraStacks: ["DocuSign"], budget: "$500–2k/mo", timeline: "1–3 months", compliance: ["GDPR"],
   },
 ];
 
@@ -1020,12 +993,12 @@ export default function Home() {
               <Chips options={size ? BUDGETS_BY_SIZE[size] ?? DEFAULT_BUDGETS : DEFAULT_BUDGETS} selected={budget} onSelect={setBudget} />
             </div>
             <div className="space-y-2">
-              <p className="text-white/40 text-xs uppercase tracking-wider">Timeline</p>
+              <p className="text-white/40 text-xs uppercase tracking-wider">Implementation timeline</p>
               <Chips options={TIMELINES} selected={timeline} onSelect={setTimeline} />
             </div>
             <div className="space-y-2">
               <p className="text-white/40 text-xs uppercase tracking-wider">
-                Compliance / data sensitivity <span className="text-white/25 normal-case tracking-normal">(pick all that apply)</span>
+                Compliance <span className="text-white/25 normal-case tracking-normal">(pick all that apply)</span>
                 {compliance.filter((c) => c !== "None / Not sure").length > 0 && (
                   <span className="ml-2 text-blue-400/90 normal-case tracking-normal font-medium">
                     {compliance.filter((c) => c !== "None / Not sure").length} selected
