@@ -325,7 +325,11 @@ export async function generatePDF(
   doc.setTextColor(...C.light);
   doc.setFont("helvetica", "normal");
   doc.text(solution.title.toUpperCase(), ML, y + 4);
-  y += 12;
+  y += 10;
+
+  // Reserve a line for the contents strip (backfilled once page numbers are known)
+  const tocSlotY = y + 2;
+  y += 8;
 
   y = sectionLabel(doc, "Executive Summary", y);
 
@@ -356,32 +360,43 @@ export async function generatePDF(
     y += 2;
   }
 
-  // Key metrics — 3 boxes
+  // Key metrics — 3 boxes. Long itemized cost strings get reduced to their
+  // total (the itemization lives in the TCO table) so the box can't overflow.
+  const shortCost = (v: string) => {
+    if (v.length <= 45) return v;
+    const total = v.split("=").pop()?.trim();
+    return total && total.length < v.length ? total : v;
+  };
   const boxW = (CW - 8) / 3;
   const boxes = [
-    { label: "ESTIMATED MONTHLY COST", value: solution.estimatedCost },
+    { label: "ESTIMATED MONTHLY COST", value: shortCost(solution.estimatedCost) },
     { label: "TIME TO IMPLEMENT", value: solution.timeToImplement },
     { label: "TOOLS RECOMMENDED", value: `${solution.tools.length} tools` },
   ];
+  const boxLines = boxes.map((b) => {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    return (doc.splitTextToSize(b.value, boxW - 5) as string[]).slice(0, 3);
+  });
+  const boxH = 13 + Math.max(...boxLines.map((l) => l.length)) * 4.3;
   boxes.forEach((b, i) => {
     const bx = ML + i * (boxW + 4);
     doc.setFillColor(...C.white);
     doc.setDrawColor(...C.rule);
     doc.setLineWidth(0.3);
-    doc.roundedRect(bx, y, boxW, 22, 2, 2, "FD");
+    doc.roundedRect(bx, y, boxW, boxH, 2, 2, "FD");
     doc.setFillColor(...C.accent);
     doc.roundedRect(bx, y, boxW, 2.5, 1, 1, "F");
     doc.setFontSize(6.5);
     doc.setTextColor(...C.light);
     doc.setFont("helvetica", "normal");
     doc.text(b.label, bx + boxW / 2, y + 8, { align: "center" });
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(...C.dark);
     doc.setFont("helvetica", "bold");
-    const vLines = doc.splitTextToSize(b.value, boxW - 4);
-    doc.text(vLines, bx + boxW / 2, y + 15, { align: "center" });
+    doc.text(boxLines[i], bx + boxW / 2, y + 14.5, { align: "center" });
   });
-  y += 30;
+  y += boxH + 8;
 
   // ROI section if provided
   if (roi && roi.weeklyHours > 0) {
@@ -452,9 +467,7 @@ export async function generatePDF(
     y += cardH + 3;
   });
 
-  const execEndY = y;
   addPageNum(doc, page);
-  const execLastPage = page;
 
   // ══════════════════════════════════════════════
   // PAGE(S) — IMPLEMENTATION PLAN (phases flow continuously)
@@ -907,29 +920,16 @@ export async function generatePDF(
     addPageNum(doc, page);
   }
 
-  // Backfill "in this document" onto the exec page now that page numbers are known
-  if (toc.length > 0 && execEndY < H - (toc.length * 6 + 34)) {
-    doc.setPage(execLastPage);
-    let ty = execEndY + 6;
+  // Backfill a compact one-line contents strip onto page 2 now that page
+  // numbers are known — always fits, unlike a block that competes for space
+  if (toc.length > 0) {
+    doc.setPage(2);
+    const short = (l: string) => l.split(",")[0].split("&")[0].trim();
+    const line = toc.map((t) => `${short(t.label)} p.${t.page}`).join("   ·   ");
     doc.setFontSize(7.5);
-    doc.setTextColor(...C.light);
+    doc.setTextColor(...C.mid);
     doc.setFont("helvetica", "normal");
-    doc.text("IN THIS DOCUMENT", ML, ty);
-    rule(doc, ty + 2);
-    ty += 8;
-    toc.forEach((t) => {
-      doc.setFontSize(8.5);
-      doc.setTextColor(...C.dark);
-      doc.setFont("helvetica", "normal");
-      doc.text(t.label, ML, ty);
-      doc.setTextColor(...C.accent);
-      doc.setFont("helvetica", "bold");
-      doc.text(`p. ${t.page}`, ML + CW, ty, { align: "right" });
-      doc.setDrawColor(...C.rule);
-      doc.setLineWidth(0.15);
-      doc.line(ML + doc.getTextWidth(t.label) + 3, ty - 0.8, ML + CW - 12, ty - 0.8);
-      ty += 6;
-    });
+    doc.text(line, W / 2, tocSlotY, { align: "center" });
   }
 
   doc.save(`${solution.title.replace(/[^a-z0-9]/gi, "_").slice(0, 40)}_Implementation_Plan.pdf`);
