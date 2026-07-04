@@ -14,7 +14,7 @@ interface TcoLineItem { item: string; type: string; cost: string; }
 interface Kpi { metric: string; baseline?: string; target: string; timeframe?: string; }
 interface AdoptionStep { title: string; detail: string; }
 interface Solution {
-  title: string; insight?: string; summary: string; tools: Tool[];
+  title: string; insight?: string; summary: string; tools: Tool[]; assumptions?: string[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
   rolloutPlaybook?: { stakeholders?: Stakeholder[]; tickets?: Ticket[] };
   approvals?: { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[] };
@@ -370,8 +370,8 @@ export async function generatePDF(
   const boxW = (CW - 8) / 3;
   const boxes = [
     { label: "ESTIMATED MONTHLY COST", value: shortCost(solution.estimatedCost) },
+    { label: "FIRST-YEAR TOTAL", value: solution.tco?.firstYearTotal ?? `${solution.tools.length} tools` },
     { label: "TIME TO IMPLEMENT", value: solution.timeToImplement },
-    { label: "TOOLS RECOMMENDED", value: `${solution.tools.length} tools` },
   ];
   const boxLines = boxes.map((b) => {
     doc.setFontSize(10);
@@ -427,6 +427,24 @@ export async function generatePDF(
       doc.text(b.value, bx + boxW / 2, y + 17, { align: "center" });
     });
     y += 30;
+  }
+
+  // Assumptions the AI made — flag them honestly
+  if (solution.assumptions && solution.assumptions.length > 0) {
+    doc.setFontSize(6.8);
+    doc.setTextColor(180, 130, 10);
+    doc.setFont("helvetica", "bold");
+    doc.text("WE ASSUMED — VERIFY THESE", ML, y + 1);
+    y += 4.5;
+    solution.assumptions.slice(0, 5).forEach((a) => {
+      doc.setFontSize(7.5);
+      doc.setTextColor(...C.mid);
+      doc.setFont("helvetica", "italic");
+      const aLines = doc.splitTextToSize(`- ${a}`, CW - 4) as string[];
+      doc.text(aLines, ML + 2, y + 1);
+      y += aLines.length * 3.9 + 0.8;
+    });
+    y += 4;
   }
 
   // Tools as cards — the WHY matters as much as the WHAT for an implementer
