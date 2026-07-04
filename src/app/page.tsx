@@ -838,7 +838,7 @@ export default function Home() {
         {/* Live report preview — sections appear the moment they're written */}
         {(preview.title || preview.tools || preview.phases) && (
           <div data-preview className="bg-white/3 border border-white/10 rounded-2xl p-5 animate-in fade-in text-left">
-            <p className="text-emerald-400/70 text-xs uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <p className="text-white/40 text-xs uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" /> Your report so far
             </p>
             {preview.title && <h2 className="text-xl font-bold text-white mb-1">{preview.title}</h2>}
@@ -863,7 +863,7 @@ export default function Home() {
                 ))}
               </ul>
             )}
-            {preview.estimatedCost && <p className="text-emerald-400/80 text-sm font-medium mt-3">{preview.estimatedCost}</p>}
+            {preview.estimatedCost && <p className="text-white text-sm font-medium mt-3">{preview.estimatedCost}</p>}
           </div>
         )}
         </div>
@@ -968,7 +968,7 @@ export default function Home() {
               <p className="text-white/40 text-xs uppercase tracking-wider">
                 Current stack <span className="text-white/25 normal-case tracking-normal">(pick all that apply)</span>
                 {(stacks.filter((s) => s !== "Recommend for me").length + extraStacks.length) > 0 && (
-                  <span className="ml-2 text-emerald-400/80 normal-case tracking-normal font-medium">
+                  <span className="ml-2 text-blue-400/90 normal-case tracking-normal font-medium">
                     {stacks.filter((s) => s !== "Recommend for me").length + extraStacks.length} selected
                   </span>
                 )}
@@ -1004,7 +1004,7 @@ export default function Home() {
               <p className="text-white/40 text-xs uppercase tracking-wider">
                 Compliance / data sensitivity <span className="text-white/25 normal-case tracking-normal">(pick all that apply)</span>
                 {compliance.filter((c) => c !== "None / Not sure").length > 0 && (
-                  <span className="ml-2 text-emerald-400/80 normal-case tracking-normal font-medium">
+                  <span className="ml-2 text-blue-400/90 normal-case tracking-normal font-medium">
                     {compliance.filter((c) => c !== "None / Not sure").length} selected
                   </span>
                 )}
