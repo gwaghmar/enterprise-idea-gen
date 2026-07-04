@@ -73,7 +73,7 @@ interface Tool {
 }
 interface FlowNode { id: string; label: string; type: string; }
 interface FlowEdge { from: string; to: string; label?: string; }
-interface Phase { title: string; actions: string[]; nodes?: FlowNode[]; edges?: FlowEdge[]; }
+interface Phase { title: string; objective?: string; actions: string[]; exitCriteria?: string[]; nodes?: FlowNode[]; edges?: FlowEdge[]; }
 interface Stakeholder { role: string; team: string; responsibility: string; whenToContact: string; }
 interface Ticket { system: string; type: string; title: string; assignTo: string; }
 interface Permission { name: string; owner: string; why: string; }
@@ -713,9 +713,12 @@ export default function SolutionPage() {
             <div className="space-y-6">
               {solution.phases.map((phase, i) => (
                 <div key={i} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-                  <div className="flex items-center gap-3 px-5 py-4 border-b border-white/8">
-                    <span className="w-7 h-7 rounded-full bg-white/15 text-white text-xs flex items-center justify-center font-semibold shrink-0">{i + 1}</span>
-                    <h3 className="font-semibold text-white">{phase.title}</h3>
+                  <div className="px-5 py-4 border-b border-white/8">
+                    <div className="flex items-center gap-3">
+                      <span className="w-7 h-7 rounded-full bg-white/15 text-white text-xs flex items-center justify-center font-semibold shrink-0">{i + 1}</span>
+                      <h3 className="font-semibold text-white">{phase.title}</h3>
+                    </div>
+                    {phase.objective && <p className="text-white/50 text-sm mt-2 ml-10">{phase.objective}</p>}
                   </div>
                   <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div>
@@ -731,6 +734,19 @@ export default function SolutionPage() {
                           </li>
                         ))}
                       </ul>
+                      {phase.exitCriteria && phase.exitCriteria.length > 0 && (
+                        <div className="mt-4 border-t border-white/8 pt-3">
+                          <p className="text-emerald-400/70 text-xs uppercase tracking-wider mb-2">Done when</p>
+                          <ul className="space-y-1.5">
+                            {phase.exitCriteria.map((c, j) => (
+                              <li key={j} className="flex items-start gap-2 text-sm text-white/60">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400/60 shrink-0 mt-0.5" />
+                                <span>{c}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                     {phase.nodes && phase.nodes.length > 0 && (
                       <div>

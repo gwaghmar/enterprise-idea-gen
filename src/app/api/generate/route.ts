@@ -237,6 +237,7 @@ INSTRUCTIONS:
 - Fit the ${industry} industry and satisfy compliance needs: ${compliance}
 - Match complexity to the team's technical level (${techLevel}) — no raw APIs for a no-code team
 - Be realistic about ${timeline} — what's truly achievable vs what needs more time
+- Every phase action names WHO does it and WHAT it produces (e.g. "IT admin provisions the sandbox and shares credentials"); exitCriteria are measurable ("100 test invoices sync with 0 errors"), never vague ("phase complete")
 - vendorQuestions should be sharp negotiation questions, not generic
 
 CRITICAL — the rollout playbook, approvals, and vendor outreach MUST be tailored to company size:
@@ -270,7 +271,9 @@ Return ONLY valid JSON, no markdown, no explanation:
   "phases": [
     {
       "title": "Phase 1 — Week 1-2",
+      "objective": "One sentence: what this phase achieves and why it comes first",
       "actions": ["Concrete action with owner and output", "Another concrete action"],
+      "exitCriteria": ["Measurable condition that marks this phase done", "Another measurable condition"],
       "nodes": [
         { "id": "p1_1", "label": "Short action phrase", "type": "start" },
         { "id": "p1_2", "label": "Short action phrase", "type": "process" },
@@ -283,7 +286,9 @@ Return ONLY valid JSON, no markdown, no explanation:
     },
     {
       "title": "Phase 2 — Week 3-4",
+      "objective": "What this phase achieves",
       "actions": ["Concrete action"],
+      "exitCriteria": ["Measurable done-condition"],
       "nodes": [
         { "id": "p2_1", "label": "Short action phrase", "type": "start" },
         { "id": "p2_2", "label": "Short action phrase", "type": "process" },
@@ -296,7 +301,9 @@ Return ONLY valid JSON, no markdown, no explanation:
     },
     {
       "title": "Phase 3 — Month 2+",
+      "objective": "What this phase achieves",
       "actions": ["Concrete action"],
+      "exitCriteria": ["Measurable done-condition"],
       "nodes": [
         { "id": "p3_1", "label": "Short action phrase", "type": "start" },
         { "id": "p3_2", "label": "Short action phrase", "type": "process" },

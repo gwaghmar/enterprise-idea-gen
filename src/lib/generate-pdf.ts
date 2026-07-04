@@ -4,7 +4,7 @@ import Dagre from "@dagrejs/dagre";
 interface FlowNode { id: string; label: string; type: string; }
 interface FlowEdge { from: string; to: string; label?: string; }
 interface Tool { name: string; purpose: string; category: string; whyForYou: string; vendorQuestions?: string[]; }
-interface Phase { title: string; actions: string[]; nodes?: FlowNode[]; edges?: FlowEdge[]; }
+interface Phase { title: string; objective?: string; actions: string[]; exitCriteria?: string[]; nodes?: FlowNode[]; edges?: FlowEdge[]; }
 interface Stakeholder { role: string; team: string; responsibility: string; whenToContact: string; }
 interface Ticket { system: string; type: string; title: string; assignTo: string; }
 interface Permission { name: string; owner: string; why: string; }
@@ -206,6 +206,8 @@ export async function generatePDF(
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   let page = 1;
+  // Section → page map, backfilled onto the exec page as a mini contents list
+  const toc: { label: string; page: number }[] = [];
 
   // ══════════════════════════════════════════════
   // PAGE 1 — COVER
@@ -412,47 +414,47 @@ export async function generatePDF(
     y += 30;
   }
 
-  // Tools overview table
-  y = sectionLabel(doc, "Recommended Tools", y);
-  const colWidths = [50, 35, CW - 85];
-  const headers = ["Tool", "Category", "Purpose"];
+  // Tools as cards — the WHY matters as much as the WHAT for an implementer
+  y = sectionLabel(doc, "Recommended Tools — And Why These", y);
 
-  // Table header
-  doc.setFillColor(...C.dark);
-  doc.rect(ML, y, CW, 7, "F");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.white);
-  doc.setFont("helvetica", "bold");
-  let cx2 = ML + 2;
-  headers.forEach((h, i) => { doc.text(h, cx2, y + 5); cx2 += colWidths[i]; });
-  y += 7;
+  solution.tools.forEach((tool) => {
+    const purposeLines = (doc.splitTextToSize(tool.purpose, CW - 10) as string[]).slice(0, 2);
+    const whyLines = tool.whyForYou
+      ? (doc.splitTextToSize(`Why for you: ${tool.whyForYou}`, CW - 10) as string[]).slice(0, 3)
+      : [];
+    const cardH = 9 + purposeLines.length * 3.9 + (whyLines.length ? whyLines.length * 3.7 + 2.5 : 0) + 3;
+    if (y + cardH > H - 22) { addPageNum(doc, page); doc.addPage(); page++; y = MT + 10; doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F"); }
 
-  solution.tools.forEach((tool, i) => {
-    if (y > H - 34) { doc.addPage(); page++; y = MT + 10; doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F"); }
-    const bg = i % 2 === 0 ? C.white : C.bgLight;
-    // Wrap purpose to two lines instead of truncating mid-sentence
-    const purposeLines = (doc.splitTextToSize(tool.purpose, colWidths[2] - 4) as string[]).slice(0, 2);
-    const rowH = purposeLines.length > 1 ? 15 : 11;
-    doc.setFillColor(...bg);
-    doc.rect(ML, y, CW, rowH, "F");
-    doc.setFontSize(8);
+    doc.setFillColor(...C.white);
+    doc.setDrawColor(...C.rule);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(ML, y, CW, cardH, 1.5, 1.5, "FD");
+
+    doc.setFontSize(9.5);
     doc.setTextColor(...C.dark);
     doc.setFont("helvetica", "bold");
-    doc.text(tool.name, ML + 2, y + 5.5);
+    doc.text(tool.name, ML + 5, y + 6);
+    const nameW = doc.getTextWidth(tool.name);
+    doc.setFontSize(7);
+    doc.setTextColor(...C.accent);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.mid);
-    doc.setFontSize(7.5);
-    doc.text(tool.category, ML + 2 + colWidths[0], y + 5.5);
+    doc.text(tool.category.toUpperCase(), ML + 8 + nameW, y + 6);
+
+    doc.setFontSize(8);
     doc.setTextColor(...C.dark);
-    doc.setFontSize(7.5);
-    doc.text(purposeLines, ML + 2 + colWidths[0] + colWidths[1], y + 5);
-    doc.setDrawColor(...C.rule);
-    doc.setLineWidth(0.2);
-    doc.line(ML, y + rowH, ML + CW, y + rowH);
-    y += rowH;
+    doc.text(purposeLines, ML + 5, y + 11);
+    if (whyLines.length) {
+      doc.setFontSize(7.5);
+      doc.setTextColor(...C.mid);
+      doc.setFont("helvetica", "italic");
+      doc.text(whyLines, ML + 5, y + 11 + purposeLines.length * 3.9 + 1.5);
+    }
+    y += cardH + 3;
   });
 
+  const execEndY = y;
   addPageNum(doc, page);
+  const execLastPage = page;
 
   // ══════════════════════════════════════════════
   // PAGE(S) — IMPLEMENTATION PLAN (phases flow continuously)
@@ -478,7 +480,26 @@ export async function generatePDF(
 
   if (solution.phases.length > 0) {
     newFlowPage();
+    toc.push({ label: "Implementation plan & vendor questions", page });
     y = sectionLabel(doc, "Implementation Plan", y);
+
+    // Timeline bar — the phases at a glance
+    if (solution.phases.length > 1) {
+      const seg = CW / solution.phases.length;
+      solution.phases.forEach((ph, i) => {
+        const sx = ML + i * seg;
+        const shade = 235 - i * 55;
+        doc.setFillColor(59, 130, Math.max(120, shade));
+        doc.roundedRect(sx, y, seg - 1.5, 6.5, 1, 1, "F");
+        doc.setFontSize(6.5);
+        doc.setTextColor(...C.white);
+        doc.setFont("helvetica", "bold");
+        const label = ph.title.replace(/^Phase\s*\d+\s*[—–-]+\s*/i, "");
+        const lLine = (doc.splitTextToSize(label, seg - 6) as string[])[0] ?? "";
+        doc.text(lLine, sx + (seg - 1.5) / 2, y + 4.3, { align: "center" });
+      });
+      y += 11;
+    }
 
     solution.phases.forEach((phase, phaseIdx) => {
       const hasChart = !!(phase.nodes && phase.nodes.length > 0);
@@ -487,9 +508,11 @@ export async function generatePDF(
       // Estimate the block height so a phase never splits across pages
       doc.setFontSize(8);
       let estH = 12 + (hasChart ? chartH + 5 : 0);
+      if (phase.objective) estH += (doc.splitTextToSize(phase.objective, CW - 12) as string[]).length * 4 + 2;
       phase.actions.forEach((a) => {
         estH += (doc.splitTextToSize(a, CW - 8) as string[]).length * 4.6 + 2;
       });
+      if (phase.exitCriteria?.length) estH += 6 + phase.exitCriteria.length * 4.4;
       flowRoom(estH + 14);
 
       // Phase badge + title
@@ -502,7 +525,19 @@ export async function generatePDF(
       doc.setFontSize(12);
       doc.setTextColor(...C.dark);
       doc.text(phase.title, ML + 10, y + 4);
-      y += 11;
+      y += 9;
+
+      // Objective — what this phase is for
+      if (phase.objective) {
+        doc.setFontSize(8.5);
+        doc.setTextColor(...C.mid);
+        doc.setFont("helvetica", "italic");
+        const oLines = doc.splitTextToSize(phase.objective, CW - 12) as string[];
+        doc.text(oLines, ML + 10, y + 1);
+        y += oLines.length * 4 + 3;
+      } else {
+        y += 2;
+      }
 
       // Actions (full width)
       phase.actions.forEach((action) => {
@@ -516,6 +551,25 @@ export async function generatePDF(
         doc.text(aLines, ML + 6, y + 1);
         y += aLines.length * 4.6 + 2;
       });
+
+      // Exit criteria — when this phase counts as done
+      if (phase.exitCriteria && phase.exitCriteria.length > 0) {
+        y += 1;
+        doc.setFontSize(6.8);
+        doc.setTextColor(5, 150, 105);
+        doc.setFont("helvetica", "bold");
+        doc.text("DONE WHEN", ML + 1, y + 1);
+        y += 4.5;
+        phase.exitCriteria.forEach((c) => {
+          doc.setFontSize(7.8);
+          doc.setTextColor(...C.mid);
+          doc.setFont("helvetica", "normal");
+          const cLines = doc.splitTextToSize(`[ ] ${c}`, CW - 10) as string[];
+          doc.text(cLines, ML + 6, y + 1);
+          y += cLines.length * 4.2 + 0.5;
+        });
+        y += 1;
+      }
 
       // Flowchart below the actions, full width — nodes render large enough to read
       if (hasChart) {
@@ -571,6 +625,7 @@ export async function generatePDF(
 
   if (hasCostPage) {
     doc.addPage(); page++;
+    toc.push({ label: "Total cost of ownership, metrics & Option B", page });
     doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F");
     doc.setFillColor(...C.accent); doc.rect(0, 0, W, 1.5, "F");
     y = MT;
@@ -693,6 +748,7 @@ export async function generatePDF(
   if (hasRollout) {
     doc.addPage();
     page++;
+    toc.push({ label: "Internal rollout, approvals & vendor outreach", page });
     doc.setFillColor(...C.bgLight);
     doc.rect(0, 0, W, H, "F");
     doc.setFillColor(...C.accent);
@@ -835,6 +891,7 @@ export async function generatePDF(
     doc.setFillColor(...C.accent);
     doc.rect(0, 0, W, 1.5, "F");
 
+    toc.push({ label: "Research sources", page });
     y = MT + 10;
     y = sectionLabel(doc, "Research Sources", y);
     citations.forEach((url, i) => {
@@ -848,6 +905,31 @@ export async function generatePDF(
     });
 
     addPageNum(doc, page);
+  }
+
+  // Backfill "in this document" onto the exec page now that page numbers are known
+  if (toc.length > 0 && execEndY < H - (toc.length * 6 + 34)) {
+    doc.setPage(execLastPage);
+    let ty = execEndY + 6;
+    doc.setFontSize(7.5);
+    doc.setTextColor(...C.light);
+    doc.setFont("helvetica", "normal");
+    doc.text("IN THIS DOCUMENT", ML, ty);
+    rule(doc, ty + 2);
+    ty += 8;
+    toc.forEach((t) => {
+      doc.setFontSize(8.5);
+      doc.setTextColor(...C.dark);
+      doc.setFont("helvetica", "normal");
+      doc.text(t.label, ML, ty);
+      doc.setTextColor(...C.accent);
+      doc.setFont("helvetica", "bold");
+      doc.text(`p. ${t.page}`, ML + CW, ty, { align: "right" });
+      doc.setDrawColor(...C.rule);
+      doc.setLineWidth(0.15);
+      doc.line(ML + doc.getTextWidth(t.label) + 3, ty - 0.8, ML + CW - 12, ty - 0.8);
+      ty += 6;
+    });
   }
 
   doc.save(`${solution.title.replace(/[^a-z0-9]/gi, "_").slice(0, 40)}_Implementation_Plan.pdf`);
