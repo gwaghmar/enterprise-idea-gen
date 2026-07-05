@@ -13,6 +13,22 @@ import { FREE_MODE } from "@/lib/config";
 
 // Citations/activity URLs come from external sources — only render links for
 // http(s) URLs so a crafted share payload can't smuggle javascript: links
+// Small verify-me pill: favicon + domain, links to the citation
+function SourcePill({ url }: { url?: string }) {
+  const safe = safeHttpUrl(url);
+  if (!safe) return null;
+  const domain = faviconDomain(safe);
+  return (
+    <a href={safe} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+      title={`Source: ${safe}`}
+      className="inline-flex items-center gap-1 align-middle bg-white/[0.06] border border-white/10 rounded-full pl-1.5 pr-2 py-0.5 text-[10px] text-white/45 hover:text-white/80 hover:border-white/25 transition-colors max-w-[160px]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" width={10} height={10} className="w-2.5 h-2.5 rounded-sm shrink-0" />
+      <span className="truncate">{domain}</span>
+    </a>
+  );
+}
+
 function safeHttpUrl(u: string | undefined): string | null {
   if (!u) return null;
   try {
@@ -82,14 +98,14 @@ interface Risk { risk: string; severity: string; mitigation: string; }
 interface RolloutPlaybook { stakeholders?: Stakeholder[]; tickets?: Ticket[]; }
 interface Approvals { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[]; }
 interface VendorOutreach { howToReach?: string; email?: string; demoChecklist?: string[]; }
-interface TcoLineItem { item: string; type: string; cost: string; }
+interface TcoLineItem { item: string; type: string; cost: string; sourceUrl?: string; }
 interface Tco { lineItems?: TcoLineItem[]; oneTimeSetup?: string; monthlyRecurring?: string; firstYearTotal?: string; hiddenCosts?: string[]; }
 interface Kpi { metric: string; baseline?: string; target: string; timeframe?: string; }
 interface AdoptionStep { title: string; detail: string; }
 interface Alternative { name: string; summary: string; tools?: string[]; estimatedCost?: string; tradeoff?: string; }
-interface Evaluated { name: string; verdict: string; reason: string; }
+interface Evaluated { name: string; verdict: string; reason: string; sourceUrl?: string; }
 interface Solution {
-  title: string; insight?: string; summary: string; tools: Tool[];
+  title: string; insight?: string; insightSourceUrl?: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
   rolloutPlaybook?: RolloutPlaybook; approvals?: Approvals; vendorOutreach?: VendorOutreach;
   tco?: Tco; kpis?: Kpi[]; adoptionPlan?: AdoptionStep[]; alternative?: Alternative;
@@ -622,7 +638,7 @@ export default function SolutionPage() {
         {solution.insight && (
           <div className="flex gap-3 bg-white/5 border border-white/15 rounded-xl px-5 py-4 mb-6 max-w-3xl">
             <Lightbulb className="w-5 h-5 text-yellow-400/70 shrink-0" />
-            <p className="text-white/80 text-sm leading-relaxed italic">{solution.insight}</p>
+            <p className="text-white/80 text-sm leading-relaxed italic">{solution.insight} <SourcePill url={solution.insightSourceUrl} /></p>
           </div>
         )}
         <p className="text-white/60 text-lg mb-10 max-w-3xl">{solution.summary}</p>
@@ -723,7 +739,7 @@ export default function SolutionPage() {
                     <tbody>
                       {solution.tco.lineItems.map((li, i) => (
                         <tr key={i} className="border-t border-white/8">
-                          <td className="px-4 py-2.5 text-white/80">{li.item}</td>
+                          <td className="px-4 py-2.5 text-white/80">{li.item} <SourcePill url={li.sourceUrl} /></td>
                           <td className="px-4 py-2.5 text-white/45">{li.type}</td>
                           <td className="px-4 py-2.5 text-white/80 text-right tabular-nums">{li.cost}</td>
                         </tr>
@@ -773,7 +789,7 @@ export default function SolutionPage() {
                     <span className="text-sm font-medium text-white">{c.name}</span>
                     <span className={`ml-auto text-[10px] uppercase tracking-wider ${c.verdict === "chosen" ? "text-blue-400" : "text-white/30"}`}>{c.verdict}</span>
                   </div>
-                  <p className="text-white/50 text-xs">{c.reason}</p>
+                  <p className="text-white/50 text-xs">{c.reason} <SourcePill url={c.sourceUrl} /></p>
                   {c.verdict !== "chosen" && (
                     <button onClick={() => handleSwap("the currently chosen tools it lost to", `Use ${c.name} as the primary solution instead`)}
                       disabled={!!remixing}
