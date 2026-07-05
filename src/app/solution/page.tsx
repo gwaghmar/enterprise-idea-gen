@@ -13,37 +13,53 @@ import { FREE_MODE } from "@/lib/config";
 
 // Citations/activity URLs come from external sources — only render links for
 // http(s) URLs so a crafted share payload can't smuggle javascript: links
-// Small verify-me pill: favicon + domain, links to the citation. When the AI
-// provides a verbatim quote we deep-link with a text fragment (#:~:text=) so
-// supporting browsers scroll to and highlight the exact sentence.
-function SourcePill({ url, quote }: { url?: string; quote?: string }) {
-  const base = safeHttpUrl(url);
-  if (!base) return null;
-  const domain = faviconDomain(base);
-  const safe = quote && quote.trim().length > 4
-    ? `${base}${base.includes("#") ? "" : `#:~:text=${encodeURIComponent(quote.trim().slice(0, 80))}`}`
-    : base;
-  return (
-    <a href={safe} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
-      title={quote ? `Source: ${domain} — jumps to "${quote.slice(0, 60)}"` : `Source: ${base}`}
-      className="inline-flex items-center gap-1 align-middle bg-white/[0.06] border border-white/10 rounded-full pl-1.5 pr-2 py-0.5 text-[10px] text-white/45 hover:text-white/80 hover:border-white/25 transition-colors max-w-[160px]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" width={10} height={10} className="w-2.5 h-2.5 rounded-sm shrink-0" />
-      <span className="truncate">{domain}</span>
-    </a>
-  );
-}
-
-// Several citations can back one claim — render them all
-function SourcePills({ url, urls, quote }: { url?: string; urls?: string[]; quote?: string }) {
-  const all = [url, ...(urls ?? [])].filter((u, i, a) => u && a.indexOf(u) === i) as string[];
+// One quiet pill labeled "Source" per block. Clicking it opens a small panel
+// listing every citation that backs the claim — favicon, domain, and a
+// deep-link (#:~:text=) that scrolls supporting browsers to the exact quote.
+function SourcePill({ url, urls, quote }: { url?: string; urls?: string[]; quote?: string }) {
+  const [open, setOpen] = useState(false);
+  const all = [url, ...(urls ?? [])]
+    .map((u) => safeHttpUrl(u))
+    .filter((u, i, a) => u && a.indexOf(u) === i) as string[];
   if (all.length === 0) return null;
+  const withQuote = (base: string, q?: string) =>
+    q && q.trim().length > 4 && !base.includes("#")
+      ? `${base}#:~:text=${encodeURIComponent(q.trim().slice(0, 80))}`
+      : base;
   return (
-    <span className="inline-flex flex-wrap gap-1 align-middle">
-      {all.slice(0, 3).map((u, i) => <SourcePill key={u} url={u} quote={i === 0 ? quote : undefined} />)}
+    <span className="relative inline-block align-middle" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title={all.length > 1 ? `${all.length} sources — click to view` : "View source"}
+        className={`inline-flex items-center gap-1 rounded-full pl-2 pr-2 py-0.5 text-[10px] border transition-colors ${open ? "bg-white/15 border-white/30 text-white/80" : "bg-white/[0.06] border-white/10 text-white/45 hover:text-white/80 hover:border-white/25"}`}
+      >
+        Source{all.length > 1 ? `s · ${all.length}` : ""}
+      </button>
+      {open && (
+        <>
+          <span className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <span className="absolute left-0 top-full mt-1.5 z-50 w-72 max-w-[80vw] bg-[#101420] border border-white/15 rounded-xl shadow-xl p-2 flex flex-col gap-1">
+            {all.map((u, i) => (
+              <a key={u} href={withQuote(u, i === 0 ? quote : undefined)} target="_blank" rel="noopener noreferrer"
+                className="flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-white/8 transition-colors">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`https://www.google.com/s2/favicons?domain=${faviconDomain(u)}&sz=32`} alt="" width={14} height={14} className="w-3.5 h-3.5 rounded-sm shrink-0 mt-0.5" />
+                <span className="min-w-0">
+                  <span className="block text-xs text-white/85 font-medium">{faviconDomain(u)}</span>
+                  <span className="block text-[10px] text-white/40 truncate">{u.replace(/^https?:\/\//, "")}</span>
+                  {i === 0 && quote && <span className="block text-[10px] text-blue-300/70 italic truncate">jumps to: &ldquo;{quote.slice(0, 50)}&rdquo;</span>}
+                </span>
+              </a>
+            ))}
+          </span>
+        </>
+      )}
     </span>
   );
 }
+
+const SourcePills = SourcePill;
 
 function safeHttpUrl(u: string | undefined): string | null {
   if (!u) return null;
