@@ -483,6 +483,10 @@ export default function Home() {
   const [error, setError] = useState("");
   const [errorQuip, setErrorQuip] = useState("");
   const [resumable, setResumable] = useState(false);
+  const [clarify, setClarify] = useState<{ question: string; options: string[] } | null>(null);
+  const [clarifyChoice, setClarifyChoice] = useState("");
+  const [clarifyExtra, setClarifyExtra] = useState("");
+  const [clarifying, setClarifying] = useState(false);
   const [factIdx, setFactIdx] = useState(0);
   const [hasHistory, setHasHistory] = useState(false);
   const router = useRouter();
@@ -592,12 +596,39 @@ export default function Home() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isReady) return;
+    // One sharp follow-up with tappable choices makes the report far more
+    // accurate — best-effort, generation starts regardless
+    setClarifying(true);
+    setError("");
+    try {
+      const res = await fetch("/api/clarify", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ problem: problem.trim(), industry: industry.trim(), size, team }),
+      });
+      const data = await res.json();
+      if (res.ok && data.question && Array.isArray(data.options) && data.options.length >= 2) {
+        setClarify({ question: data.question, options: data.options });
+        setClarifyChoice("");
+        setClarifyExtra("");
+        setClarifying(false);
+        return; // wait for the user's answer (or skip)
+      }
+    } catch { /* proceed without clarification */ }
+    setClarifying(false);
     await runGeneration(false);
+  }
+
+  function clarificationText() {
+    const parts = [];
+    if (clarify && clarifyChoice) parts.push(`${clarify.question} ${clarifyChoice}`);
+    if (clarifyExtra.trim()) parts.push(clarifyExtra.trim());
+    return parts.join(". ");
   }
 
   // resume=true keeps the already-streamed preview on screen so a retry after
   // a dropped connection feels like continuing, not starting over
   async function runGeneration(resume: boolean) {
+    setClarify(null);
     // Same runId across resumes lets the server skip completed stages
     if (!resume || !runIdRef.current) {
       runIdRef.current = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)).replace(/[^a-z0-9-]/gi, "").slice(0, 36);
@@ -635,6 +666,7 @@ export default function Home() {
       seats: seats.trim(),
       techLevel,
       compliance: compliance.join(", ") || "Not specified",
+      clarification: clarificationText().slice(0, 500),
       runId: runIdRef.current,
     };
 
@@ -741,6 +773,42 @@ export default function Home() {
     } catch {
       showError("Couldn't reach the server. Check your connection.", "network", true);
     }
+  }
+
+  // One follow-up question between submit and generation — tap an answer,
+  // add anything extra, or skip straight to the report
+  if (clarify) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center px-4 py-16">
+        <div data-clarify className="w-full max-w-xl space-y-6">
+          <p className="text-white/40 text-xs uppercase tracking-wider flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" /> One quick question — makes your report far more accurate
+          </p>
+          <h2 className="text-2xl font-bold">{clarify.question}</h2>
+          <div className="flex flex-col gap-2">
+            {clarify.options.map((o) => (
+              <button key={o} type="button" onClick={() => setClarifyChoice(clarifyChoice === o ? "" : o)}
+                className={`text-left px-4 py-3 rounded-xl border text-sm transition-all ${clarifyChoice === o ? "border-blue-500/60 bg-blue-500/10 text-white" : "border-white/15 bg-white/5 text-white/60 hover:border-white/40 hover:text-white"}`}>
+                {clarifyChoice === o && <Check className="w-3.5 h-3.5 inline mr-2 text-blue-400" />}{o}
+              </button>
+            ))}
+          </div>
+          <input
+            value={clarifyExtra}
+            onChange={(e) => setClarifyExtra(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") runGeneration(false); }}
+            placeholder="Anything else worth knowing? (optional)"
+            className="w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/40"
+          />
+          <div className="flex gap-3">
+            <button type="button" onClick={() => runGeneration(false)}
+              className="flex-1 bg-white text-black font-semibold rounded-xl py-3.5 text-sm hover:bg-white/90 transition-all">
+              {clarifyChoice || clarifyExtra.trim() ? "Continue — generate my report" : "Skip — generate anyway"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {
@@ -1043,9 +1111,9 @@ export default function Home() {
             </div>
           )}
 
-          <button type="submit" disabled={!isReady}
+          <button type="submit" disabled={!isReady || clarifying}
             className="w-full bg-white text-black font-semibold rounded-2xl py-4 text-base hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-            Generate Solution — Free Preview
+            {clarifying ? "One moment…" : "Generate Solution — Free Preview"}
           </button>
         </form>
 
