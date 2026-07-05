@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
 import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
+import { normalizeSolution } from "@/lib/normalize-solution";
 
 export const maxDuration = 60;
 
@@ -63,7 +64,7 @@ Return ONLY the full valid JSON object — no markdown, no commentary.`;
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
     if (start === -1 || end === -1 || end <= start) throw new Error("No JSON in edit response");
-    const updated = JSON.parse(text.slice(start, end + 1));
+    const updated = normalizeSolution(JSON.parse(text.slice(start, end + 1)));
 
     return new Response(JSON.stringify({ solution: updated }), {
       headers: { "Content-Type": "application/json" },
