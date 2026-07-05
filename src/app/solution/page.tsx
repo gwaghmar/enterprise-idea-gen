@@ -61,6 +61,45 @@ function SourcePill({ url, urls, quote }: { url?: string; urls?: string[]; quote
 
 const SourcePills = SourcePill;
 
+// The exec metric boxes are built for short values; older reports sometimes
+// carry a whole cost breakdown in estimatedCost. Pull out the headline figure
+// and tuck the rest behind an expandable detail line.
+function shortMetric(v: string | undefined): { short: string; detail?: string } {
+  const val = (v ?? "").trim();
+  if (val.length <= 34) return { short: val };
+  // Several prices may appear ("$150 + $400 = $1,010/mo total") — prefer the
+  // one adjacent to "total", else the last (usually the sum)
+  const prices = [...val.matchAll(/[~≈]?[$€£]\s?\d[\d,.]*\s?(k|K|M)?(\s?\/\s?(mo|month|yr|year))?/g)];
+  if (prices.length > 0) {
+    const nearTotal = [...prices].reverse().find((pm) => {
+      const end = (pm.index ?? 0) + pm[0].length;
+      return /^\s*(total|est)/i.test(val.slice(end, end + 12)) || /total[:\s]*$/i.test(val.slice(Math.max(0, (pm.index ?? 0) - 12), pm.index ?? 0));
+    });
+    const best = nearTotal ?? prices[prices.length - 1];
+    return { short: best[0].replace(/\s+/g, " ").trim(), detail: val };
+  }
+  const m = val.match(/\d+\s?[–-]\s?\d+\s?(weeks?|months?|days?)/i) || val.match(/\d+\s?(weeks?|months?|days?|phases?)/i);
+  if (m) return { short: m[0].replace(/\s+/g, " ").trim(), detail: val };
+  return { short: val.slice(0, 30) + "…", detail: val };
+}
+
+function MetricBox({ label, value }: { label: string; value?: string }) {
+  const [open, setOpen] = useState(false);
+  const { short, detail } = shortMetric(value);
+  return (
+    <div className="text-center min-w-0">
+      <p className="text-white/40 text-xs mb-1">{label}</p>
+      <p className="text-white font-bold text-sm sm:text-base break-words">{short}</p>
+      {detail && (
+        <button type="button" onClick={() => setOpen((o) => !o)} className="text-[10px] text-white/35 hover:text-white/70 transition-colors">
+          {open ? "hide" : "details"}
+        </button>
+      )}
+      {detail && open && <p className="text-white/50 text-xs mt-1 text-left">{detail}</p>}
+    </div>
+  );
+}
+
 function safeHttpUrl(u: string | undefined): string | null {
   if (!u) return null;
   try {
@@ -376,6 +415,9 @@ export default function SolutionPage() {
   const [sourceMeta, setSourceMeta] = useState<Record<string, string>>({});
   const [remixing, setRemixing] = useState<string | null>(null);
   const [swapTool, setSwapTool] = useState<number | null>(null);
+  const [techSwapOpen, setTechSwapOpen] = useState(false);
+  const [askSel, setAskSel] = useState<{ text: string; x: number; y: number } | null>(null);
+  const [techSwapText, setTechSwapText] = useState("");
   const [swapText, setSwapText] = useState("");
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
@@ -449,6 +491,31 @@ export default function SolutionPage() {
     : "";
 
   function pick(label: string, itemType: string) { setSelectedItem({ label, itemType }); }
+
+  // Select any sentence -> a floating "Ask AI" chip appears near the selection
+  // (mouseup on desktop, selectionchange covers mobile long-press)
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>;
+    const update = () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        const sel = window.getSelection();
+        const text = sel?.toString().trim() ?? "";
+        if (!sel || sel.isCollapsed || text.length < 8 || text.length > 400) { setAskSel(null); return; }
+        try {
+          const rect = sel.getRangeAt(0).getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) { setAskSel(null); return; }
+          setAskSel({
+            text,
+            x: Math.min(Math.max(rect.left + rect.width / 2, 60), window.innerWidth - 60),
+            y: rect.top,
+          });
+        } catch { setAskSel(null); }
+      }, 180);
+    };
+    document.addEventListener("selectionchange", update);
+    return () => { clearTimeout(t); document.removeEventListener("selectionchange", update); };
+  }, []);
 
   function handleSolutionEdit(updated: Solution) {
     setSolution(updated);
@@ -646,6 +713,19 @@ export default function SolutionPage() {
           </div>
         )}
 
+        {askSel && (
+          <button
+            type="button"
+            data-askai
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { pick(askSel.text.slice(0, 300), "Selected text"); setAskSel(null); window.getSelection()?.removeAllRanges(); }}
+            style={{ left: askSel.x, top: Math.max(askSel.y - 40, 8) }}
+            className="fixed z-50 -translate-x-1/2 flex items-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-semibold rounded-full px-3.5 py-2 shadow-lg transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" /> Ask AI
+          </button>
+        )}
+
         {/* Remix — one-click re-plans via the edit endpoint */}
         <div className="flex flex-wrap items-center gap-2 mb-8">
           <span className="text-white/35 text-xs uppercase tracking-wider mr-1 flex items-center gap-1.5"><Wand2 className="w-3.5 h-3.5" /> Remix</span>
@@ -657,6 +737,29 @@ export default function SolutionPage() {
               ) : r.label}
             </button>
           ))}
+          {techSwapOpen ? (
+            <span className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={techSwapText}
+                onChange={(e) => setTechSwapText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && techSwapText.trim()) { handleSwap("the current technology choices", `Build the implementation plan around ${techSwapText.trim()}`); setTechSwapOpen(false); } }}
+                placeholder="e.g. Power Automate, n8n, Salesforce Flow…"
+                className="bg-white/5 border border-white/15 rounded-full px-3.5 py-1.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/40 w-64 max-w-[70vw]"
+              />
+              <button onClick={() => { if (techSwapText.trim()) { handleSwap("the current technology choices", `Build the implementation plan around ${techSwapText.trim()}`); setTechSwapOpen(false); } }}
+                disabled={!techSwapText.trim() || !!remixing}
+                className="px-3.5 py-1.5 rounded-full text-sm bg-blue-500 hover:bg-blue-400 disabled:opacity-40 text-white font-medium transition-colors">
+                {remixing === "swap:the current technology choices" ? "Reworking…" : "Rebuild"}
+              </button>
+              <button onClick={() => setTechSwapOpen(false)} className="text-white/40 hover:text-white/70 text-xs transition-colors">✕</button>
+            </span>
+          ) : (
+            <button onClick={() => { setTechSwapOpen(true); setTechSwapText(""); }} disabled={!!remixing}
+              className="px-3.5 py-1.5 rounded-full text-sm border border-dashed border-blue-500/40 text-blue-400/80 hover:border-blue-400 hover:text-blue-300 disabled:opacity-40 transition-all">
+              Use a specific tech…
+            </button>
+          )}
         </div>
 
         {/* Problem */}
@@ -685,10 +788,7 @@ export default function SolutionPage() {
               { label: "Time to Implement", value: solution.timeToImplement },
               { label: "Implementation Phases", value: `${solution.phases.length} phases` },
             ].map((m) => (
-              <div key={m.label} className="text-center">
-                <p className="text-white/40 text-xs mb-1">{m.label}</p>
-                <p className="text-white font-bold text-base">{m.value}</p>
-              </div>
+              <MetricBox key={m.label} label={m.label} value={m.value} />
             ))}
           </div>
         </div>
