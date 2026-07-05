@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
+import { sameOrigin, forbidden } from "@/lib/security";
+import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
 
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) return forbidden();
+  if (!rateLimit(`share:${clientIp(req)}`, 20, 3_600_000)) return tooMany("Slow down a little — try again in a bit.");
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json({ error: "Share not configured" }, { status: 503 });
   }

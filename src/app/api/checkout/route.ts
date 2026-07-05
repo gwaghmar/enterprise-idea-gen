@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { sameOrigin, forbidden } from "@/lib/security";
+import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
 
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) return forbidden();
+  if (!rateLimit(`checkout:${clientIp(req)}`, 10, 3_600_000)) return tooMany("Slow down a little — try again in a bit.");
   if (!process.env.STRIPE_SECRET_KEY) {
     console.error(JSON.stringify({ step: "checkout", error: "STRIPE_SECRET_KEY not set" }));
     return NextResponse.json({ error: "Payment not configured" }, { status: 503 });

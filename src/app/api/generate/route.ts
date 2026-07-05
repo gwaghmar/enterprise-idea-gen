@@ -4,6 +4,7 @@ import { put } from "@vercel/blob";
 import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
 import { normalizeSolution } from "@/lib/normalize-solution";
 import { loadLessons } from "@/lib/learning";
+import { sameOrigin, forbidden } from "@/lib/security";
 
 // Checkpoint saved after each expensive pipeline stage so a dropped
 // connection can resume instead of re-buying research and synthesis
@@ -48,6 +49,7 @@ function log(reqId: string, step: string, data: Record<string, unknown>) {
 export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) return forbidden();
   const reqId = Math.random().toString(36).slice(2, 9);
 
   // Generation is the expensive call — cap it per IP

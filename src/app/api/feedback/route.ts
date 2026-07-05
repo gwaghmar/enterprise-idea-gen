@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
 import { maybeDistill } from "@/lib/learning";
+import { sameOrigin, forbidden } from "@/lib/security";
 
 // Feedback loop: thumbs + optional comment from the report page.
 // Logged (visible in Vercel logs) and mirrored to Blob when configured.
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) return forbidden();
   if (!rateLimit(`fb:${clientIp(req)}`, 10, 3_600_000)) {
     return tooMany("Too much feedback too fast — thank you though!");
   }

@@ -1,0 +1,19 @@
+# PilotPlan
+
+> PilotPlan (https://pilotplan.vercel.app) is an AI solution architect for
+> businesses. Describe a business problem and it researches the live web
+> (vendor pricing, community reviews, official docs, real case studies),
+> evaluates 6-10 real candidate solutions against the company's actual
+> constraints, and produces a step-by-step implementation plan: tools with
+> reasoning, total cost of ownership with linked sources, rollout phases with
+> exit criteria, risks, internal tickets, and a vendor outreach email.
+> Free during beta. Exportable as PDF and shareable by link.
+
+## Pages
+- [Home / generator](https://pilotplan.vercel.app): describe a problem, answer one follow-up question, get the plan
+- [About](https://pilotplan.vercel.app/about): who built it and how it works
+
+## Notes for AI agents
+- Reports are generated per request from live web research; content is not a static database
+- Generated reports are informational, not professional advice
+- (c) 2026 Govind Waghmare. All rights reserved.
