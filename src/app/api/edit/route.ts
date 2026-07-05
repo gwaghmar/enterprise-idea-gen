@@ -53,7 +53,7 @@ Return ONLY the full valid JSON object — no markdown, no commentary.`;
 
   try {
     const res = await openrouter.chat.completions.create({
-      model: "anthropic/claude-sonnet-4-5",
+      model: "deepseek/deepseek-v3.2",
       max_tokens: 8000,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
