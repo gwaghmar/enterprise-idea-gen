@@ -824,13 +824,6 @@ export default function SolutionPage() {
           </div>
         )}
 
-        {/* ROI Calculator — hidden when the problem isn't hours-based */}
-        {solution.showHoursRoi !== false && (
-          <div className="mb-12">
-            <ROICalculator estimatedCost={solution.estimatedCost} />
-          </div>
-        )}
-
         {/* Unlock banner — the implementation kit sits behind the $1 */}
         {!unlocked && (
           <div className="mb-12 border border-white/20 bg-gradient-to-br from-white/8 to-white/3 rounded-2xl p-6">
@@ -1381,6 +1374,14 @@ export default function SolutionPage() {
             </div>
           )}
         </div>
+
+        {/* ROI Calculator — an interactive extra, so it lives at the end
+            instead of interrupting the report flow */}
+        {solution.showHoursRoi !== false && (
+          <div className="mb-8">
+            <ROICalculator estimatedCost={solution.estimatedCost} />
+          </div>
+        )}
 
         {/* Feedback loop — judged at the moment of judgment */}
         <div data-feedback className="mb-8 border border-white/10 rounded-2xl p-5">
