@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
+import { maybeDistill } from "@/lib/learning";
 
 // Feedback loop: thumbs + optional comment from the report page.
 // Logged (visible in Vercel logs) and mirrored to Blob when configured.
@@ -8,7 +9,7 @@ export async function POST(req: NextRequest) {
   if (!rateLimit(`fb:${clientIp(req)}`, 10, 3_600_000)) {
     return tooMany("Too much feedback too fast — thank you though!");
   }
-  let body: { rating?: string; comment?: string; title?: string };
+  let body: { rating?: string; comment?: string; title?: string; kind?: string; detail?: string };
   try {
     body = await req.json();
   } catch {
@@ -17,10 +18,14 @@ export async function POST(req: NextRequest) {
   const rating = body.rating === "up" || body.rating === "down" ? body.rating : null;
   const comment = typeof body.comment === "string" ? body.comment.trim().slice(0, 1000) : "";
   const title = typeof body.title === "string" ? body.title.slice(0, 140) : "";
-  if (!rating && !comment) {
+  // Behavioral events feed the learning loop too: tool swaps and remixes are
+  // implicit feedback about what the AI got wrong
+  const kind = ["rating", "swap", "remix", "tech"].includes(body.kind ?? "") ? body.kind : "rating";
+  const detail = typeof body.detail === "string" ? body.detail.trim().slice(0, 300) : "";
+  if (!rating && !comment && !detail) {
     return NextResponse.json({ error: "Empty feedback" }, { status: 400 });
   }
-  const entry = { rating, comment, title, ts: new Date().toISOString() };
+  const entry = { kind, rating, comment, detail, title, ts: new Date().toISOString() };
   console.log(JSON.stringify({ step: "feedback", ...entry }));
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
@@ -29,5 +34,7 @@ export async function POST(req: NextRequest) {
       });
     } catch { /* log line above is the fallback record */ }
   }
+  // Learning loop: fire-and-forget distillation of recent events into lessons
+  maybeDistill();
   return NextResponse.json({ ok: true });
 }

@@ -588,6 +588,7 @@ export default function SolutionPage() {
 
   async function handleRemix(r: { key: string; instruction: string }) {
     if (!solution || remixing) return;
+    logEvent("remix", r.key);
     setRemixing(r.key);
     try {
       const res = await fetch("/api/edit", {
@@ -600,8 +601,17 @@ export default function SolutionPage() {
     finally { setRemixing(null); }
   }
 
+  function logEvent(kind: string, detail: string) {
+    // Behavioral feedback for the learning loop — best-effort
+    try {
+      fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, detail, title: solution?.title ?? "" }) }).catch(() => {});
+    } catch { /* never block the action */ }
+  }
+
   async function handleSwap(target: string, preference: string) {
     if (!solution || remixing) return;
+    logEvent("swap", `replaced ${target} -> ${preference}`);
     setRemixing(`swap:${target}`);
     try {
       const res = await fetch("/api/edit", {
