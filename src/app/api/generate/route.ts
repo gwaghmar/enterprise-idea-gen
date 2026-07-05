@@ -188,12 +188,13 @@ PROBLEM: "${problem}"`,
           send(controller, { progress: 44, step: 3, message: "Research recovered — resuming...", citations, done: false });
           citations.slice(0, 10).forEach((url) => act({ type: "source", text: `${hostOf(url)} (${sourceMeta[url]})`, url }));
         } else {
-        send(controller, { progress: 4, step: 1, message: "Searching the web from three angles..." });
+        send(controller, { progress: 4, step: 1, message: "Searching the web from four angles..." });
         act({ type: "search", text: `Researching solutions for "${refinedProblem.slice(0, 60)}${refinedProblem.length > 60 ? "…" : ""}"` });
         act({ type: "search", text: `Scoping to ${industry} · ${size} · ${stack}` });
         act({ type: "search", text: "Angle 1 — tools, published pricing & case studies" });
         act({ type: "search", text: "Angle 2 — what real users say (Reddit, G2, community forums)" });
         act({ type: "search", text: "Angle 3 — official vendor docs & implementation guides" });
+        act({ type: "search", text: "Angle 4 — real case studies & cost benchmarks" });
         if (compliance !== "Not specified") {
           act({ type: "search", text: `Filtering for compliance fit: ${compliance}` });
         }
