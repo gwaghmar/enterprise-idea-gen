@@ -518,6 +518,10 @@ Return ONLY valid JSON, no markdown, no explanation:
   "showHoursRoi": true
 }
 
+FIELD LIMITS (breaking these ruins the report layout): estimatedCost is the TOTAL ONLY, 6 words max (e.g. "$1,010/mo total") — the itemized breakdown belongs in tco.lineItems, never here. timeToImplement is 8 words max (e.g. "4-6 weeks incl. security review") — phase detail belongs in phases. title 8 words max. Any price you could NOT verify in the research above must be written as an estimate ("~$400/mo est.") and listed in assumptions.
+
+SELF-CHECK before you output: does monthlyRecurring actually fit the ${budget} budget at ${seats} seats? Is the timeline achievable for a ${techLevel} team including procurement? Do all tools integrate with ${stack}? Fix any contradiction or state it plainly in assumptions — never ship a plan that contradicts its own constraints.
+
 STRICT JSON: output raw JSON only — no markdown fences, no commentary. Inside every string value, escape double quotes as \\" and avoid literal newlines (use \\n). One malformed character breaks the entire pipeline.
 
 Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the actual system, team, or deliverable (e.g. "Provision Workato sandbox", "Parallel-run invoices"). Generic labels like "Kickoff", "Configure", "Validate", "Go live" are BANNED, and no two phases may share the same node labels. Node IDs must be unique (p1_, p2_, p3_ prefixes).`;
