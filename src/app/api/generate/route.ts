@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
             temperature: 0.2,
             messages: [{
               role: "user",
-              content: `Rewrite this business problem statement so a solutions consultant can act on it: clear, specific, complete sentences. Keep EVERY concrete fact (systems, volumes, teams, pain points) exactly as stated; do not invent facts or numbers; keep it under 90 words; write in first person plural ("We..."). Return ONLY the rewritten statement, no preamble.
+              content: `Rewrite this business problem statement so a solutions consultant can act on it: clear, specific, complete sentences. Keep EVERY concrete fact (systems, volumes, teams, pain points) exactly as stated — any "Clarifying detail from the user" is the MOST important fact and must survive the rewrite in full; do not invent facts or numbers; keep it under ${clarification ? 120 : 90} words; write in first person plural ("We..."). Return ONLY the rewritten statement, no preamble.
 
 PROBLEM: "${problem}"`,
             }],
