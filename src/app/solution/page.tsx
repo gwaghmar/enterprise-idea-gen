@@ -327,6 +327,11 @@ export default function SolutionPage() {
   const [citations, setCitations] = useState<string[]>([]);
   const [sourceMeta, setSourceMeta] = useState<Record<string, string>>({});
   const [remixing, setRemixing] = useState<string | null>(null);
+  const [swapTool, setSwapTool] = useState<number | null>(null);
+  const [swapText, setSwapText] = useState("");
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackSent, setFeedbackSent] = useState(false);
   const [emailing, setEmailing] = useState(false);
   const [activity, setActivity] = useState<{ type: string; text: string; url?: string }[]>([]);
   const [activityFocus, setActivityFocus] = useState<string | null>(null);
@@ -478,6 +483,33 @@ export default function SolutionPage() {
       if (res.ok && data.solution) handleSolutionEdit(data.solution);
     } catch { /* leave the report as-is */ }
     finally { setRemixing(null); }
+  }
+
+  async function handleSwap(target: string, preference: string) {
+    if (!solution || remixing) return;
+    setRemixing(`swap:${target}`);
+    try {
+      const res = await fetch("/api/edit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          solution,
+          instruction: `Replace or de-emphasize "${target}" in this solution per the user's preference: "${preference}". Rebuild the affected tools, whyForYou reasoning, phases, costs, TCO, approvals, and vendor outreach around the new choice. Keep the problem and everything unrelated unchanged. If the preference is a bad fit, keep the plan workable but honor the user's tool choice and flag the tradeoff in riskAssessment or hiddenCosts.`,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.solution) handleSolutionEdit(data.solution);
+    } catch { /* leave the report as-is */ }
+    finally { setRemixing(null); setSwapTool(null); setSwapText(""); }
+  }
+
+  async function sendFeedback(rating: "up" | "down" | null, comment: string) {
+    setFeedbackSent(true);
+    try {
+      await fetch("/api/feedback", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating, comment, title: solution?.title ?? "" }),
+      });
+    } catch { /* feedback is best-effort */ }
   }
 
   async function handleExport() {
@@ -742,6 +774,13 @@ export default function SolutionPage() {
                     <span className={`ml-auto text-[10px] uppercase tracking-wider ${c.verdict === "chosen" ? "text-blue-400" : "text-white/30"}`}>{c.verdict}</span>
                   </div>
                   <p className="text-white/50 text-xs">{c.reason}</p>
+                  {c.verdict !== "chosen" && (
+                    <button onClick={() => handleSwap("the currently chosen tools it lost to", `Use ${c.name} as the primary solution instead`)}
+                      disabled={!!remixing}
+                      className="mt-1.5 text-[11px] text-blue-400/80 hover:text-blue-300 disabled:opacity-40 transition-colors">
+                      {remixing === "swap:the currently chosen tools it lost to" ? "Rebuilding…" : `Try ${c.name} instead →`}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -781,6 +820,35 @@ export default function SolutionPage() {
                     )}
                     <p className="text-xs text-white/25 group-hover:text-white/50 transition-colors pt-1 flex items-center gap-1">Click to learn more <ArrowRight className="w-3 h-3" /></p>
                   </button>
+                  {/* Swap this tool for something else — one box, full re-plan */}
+                  <div className="border-t border-white/8">
+                    {swapTool === i ? (
+                      <div className="p-3 space-y-2">
+                        <input
+                          autoFocus
+                          value={swapText}
+                          onChange={(e) => setSwapText(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter" && swapText.trim()) handleSwap(tool.name, swapText.trim()); }}
+                          placeholder={`e.g. Use Zapier instead — we already pay for it`}
+                          className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/40"
+                        />
+                        <div className="flex gap-2">
+                          <button onClick={() => swapText.trim() && handleSwap(tool.name, swapText.trim())}
+                            disabled={!swapText.trim() || !!remixing}
+                            className="flex-1 bg-blue-500 hover:bg-blue-400 disabled:opacity-40 text-white text-xs font-semibold rounded-lg py-2 transition-colors">
+                            {remixing === `swap:${tool.name}` ? "Rebuilding the plan…" : "Rebuild plan with this"}
+                          </button>
+                          <button onClick={() => { setSwapTool(null); setSwapText(""); }}
+                            className="text-white/40 hover:text-white/70 text-xs px-3 transition-colors">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setSwapTool(i); setSwapText(""); }}
+                        className="w-full text-left px-4 py-2.5 text-xs text-white/40 hover:text-white/70 transition-colors flex items-center gap-1.5">
+                        <Wand2 className="w-3 h-3" /> Swap this tool — use something else instead
+                      </button>
+                    )}
+                  </div>
                   {/* Vendor questions toggle */}
                   {tool.vendorQuestions && tool.vendorQuestions.length > 0 && (
                     <div className="border-t border-white/8">
@@ -1152,6 +1220,36 @@ export default function SolutionPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+
+        {/* Feedback loop — judged at the moment of judgment */}
+        <div data-feedback className="mb-8 border border-white/10 rounded-2xl p-5">
+          {feedbackSent ? (
+            <p className="text-white/60 text-sm flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Thanks — this directly shapes what gets improved next.</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <p className="text-white/70 text-sm font-medium">Did this report nail it?</p>
+                <button onClick={() => setFeedback("up")}
+                  className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${feedback === "up" ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400" : "border-white/15 text-white/50 hover:text-white/80"}`}>👍</button>
+                <button onClick={() => setFeedback("down")}
+                  className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${feedback === "down" ? "border-red-500/50 bg-red-500/10 text-red-400" : "border-white/15 text-white/50 hover:text-white/80"}`}>👎</button>
+              </div>
+              {feedback && (
+                <div className="flex gap-2">
+                  <input
+                    value={feedbackComment}
+                    onChange={(e) => setFeedbackComment(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") sendFeedback(feedback, feedbackComment.trim()); }}
+                    placeholder={feedback === "down" ? "What was off — wrong tools, prices, missing detail?" : "What made it useful? (optional)"}
+                    className="flex-1 bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/40"
+                  />
+                  <button onClick={() => sendFeedback(feedback, feedbackComment.trim())}
+                    className="bg-white text-black text-sm font-semibold rounded-lg px-4 transition-all hover:bg-white/90">Send</button>
+                </div>
+              )}
             </div>
           )}
         </div>
