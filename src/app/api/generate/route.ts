@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   let body: {
     problem?: string; size?: string; stack?: string; budget?: string; timeline?: string;
     industry?: string; team?: string; seats?: string; techLevel?: string; compliance?: string;
-    runId?: string;
+    clarification?: string; runId?: string;
   };
   try {
     body = await req.json();
@@ -67,7 +67,10 @@ export async function POST(req: NextRequest) {
   // Length-cap every user-supplied field before it reaches a prompt
   const field = (v: unknown, max: number, fallback = "Not specified") =>
     typeof v === "string" && v.trim() ? v.trim().slice(0, max) : fallback;
-  const problem = typeof body.problem === "string" ? body.problem.trim().slice(0, 1200) : "";
+  const clarification = typeof body.clarification === "string" ? body.clarification.trim().slice(0, 500) : "";
+  const rawProblem = typeof body.problem === "string" ? body.problem.trim().slice(0, 1200) : "";
+  // Fold the follow-up answer into the problem so every downstream step sees it
+  const problem = rawProblem && clarification ? `${rawProblem}\n\nClarifying detail from the user: ${clarification}` : rawProblem;
   const size = field(body.size, 40);
   const rawStack = field(body.stack, 400);
   // "Recommend for me" is the UI's no-stack sentinel — turn it into a real instruction
