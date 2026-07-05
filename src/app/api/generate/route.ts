@@ -391,13 +391,15 @@ CRITICAL — the rollout playbook, approvals, and vendor outreach MUST be tailor
 - alternative: propose ONE genuinely cheaper/faster/simpler fallback (Option B) with an honest tradeoff — do not just restate the main recommendation.
 - assumptions: honestly list every guess (volumes, seats, prices, integrations) so the user can correct them.
 - showHoursRoi: set false when the problem is NOT about repetitive time loss (e.g. strategy, governance, market-entry problems) — true otherwise.
-- Attach sourceUrl to each tool using the exact research citation that supports it. Same for insightSourceUrl, each TCO line item, and each evaluated candidate — every sourceUrl must be one of the provided citation URLs so the reader can verify each claim; omit when nothing supports it.
+- Attach sourceUrl to each tool using the exact research citation that supports it. Same for insightSourceUrl, each TCO line item, and each evaluated candidate — every sourceUrl must be one of the provided citation URLs so the reader can verify each claim; omit when nothing supports it. When SEVERAL citations support a claim, put the strongest in sourceUrl and up to 2 more in the matching sourceUrls array. Where you can, add a sourceQuote: a short phrase copied VERBATIM from the source content above (never paraphrased) — it deep-links the reader to the exact spot.
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
   "title": "Specific 4-8 word solution title",
   "insight": "The one thing most companies get wrong about this problem, in 1-2 sentences.",
   "insightSourceUrl": "Citation URL that best supports the insight — must be one of the provided source URLs, or omit",
+  "insightSourceUrls": ["Up to 2 more supporting citation URLs when several sources back the insight — or omit"],
+  "insightSourceQuote": "Short EXACT phrase (5-10 words) copied verbatim from that source that proves the claim — used to scroll the reader to the spot; omit if unsure",
   "evaluated": [
     { "name": "Candidate tool/approach", "verdict": "chosen", "reason": "One line, grounded in THIS company's real scenario (their stack, volumes, team skill, budget) — not generic pros/cons", "sourceUrl": "Citation URL supporting the verdict, or omit" },
     { "name": "Rejected candidate", "verdict": "rejected", "reason": "Why it loses for this specific scenario" }
@@ -468,7 +470,7 @@ Return ONLY valid JSON, no markdown, no explanation:
   "timeToImplement": "Realistic timeline for ${size} with ${timeline} urgency",
   "tco": {
     "lineItems": [
-      { "item": "Exact cost line — e.g. Workato subscription", "type": "Recurring | One-time", "cost": "e.g. $2,000/mo or $5,000", "sourceUrl": "Citation URL supporting this price, or omit" }
+      { "item": "Exact cost line — e.g. Workato subscription", "type": "Recurring | One-time", "cost": "e.g. $2,000/mo or $5,000", "sourceUrl": "Citation URL supporting this price, or omit", "sourceQuote": "Exact 5-10 word phrase from that source stating the price, or omit" }
     ],
     "oneTimeSetup": "Total one-time/setup cost — e.g. $6,500 (implementation + training + data migration)",
     "monthlyRecurring": "Total recurring — e.g. $2,400/mo",
