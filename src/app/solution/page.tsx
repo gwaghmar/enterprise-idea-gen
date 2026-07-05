@@ -741,7 +741,7 @@ export default function SolutionPage() {
           <span className="text-white/35 text-xs uppercase tracking-wider mr-1 flex items-center gap-1.5"><Wand2 className="w-3.5 h-3.5" /> Remix</span>
           {REMIXES.map((r) => (
             <button key={r.key} onClick={() => handleRemix(r)} disabled={!!remixing}
-              className="px-3.5 py-1.5 rounded-full text-sm border border-white/15 bg-white/5 text-white/55 hover:border-white/40 hover:text-white disabled:opacity-40 transition-all">
+              className="px-3.5 py-1.5 rounded-full text-sm border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:border-blue-400 hover:bg-blue-500/20 hover:text-blue-200 disabled:opacity-40 transition-all">
               {remixing === r.key ? (
                 <span className="flex items-center gap-2"><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Reworking…</span>
               ) : r.label}
