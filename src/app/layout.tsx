@@ -34,7 +34,18 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <footer className="mt-auto border-t border-white/10 bg-black px-4 py-6">
+          <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-white/35">
+            <span>© 2026 PilotPlan · Govind Waghmare · All rights reserved</span>
+            <span className="flex items-center gap-4">
+              <a href="/about" className="hover:text-white/70 transition-colors">About</a>
+              <span>Reports are informational, not professional advice</span>
+            </span>
+          </div>
+        </footer>
+      </body>
     </html>
   );
 }

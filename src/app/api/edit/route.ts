@@ -2,10 +2,12 @@ import { NextRequest } from "next/server";
 import OpenAI from "openai";
 import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
 import { normalizeSolution } from "@/lib/normalize-solution";
+import { sameOrigin, forbidden } from "@/lib/security";
 
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) return forbidden();
   if (!rateLimit(`edit:${clientIp(req)}`, 20, 3_600_000)) {
     return tooMany("Too many edits this hour — try again in a bit.");
   }

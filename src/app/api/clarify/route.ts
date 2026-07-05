@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
+import { sameOrigin, forbidden } from "@/lib/security";
 
 // One sharp follow-up question with choices, asked right after submit —
 // the answer is folded into the problem before research starts.
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) return forbidden();
   if (!rateLimit(`clarify:${clientIp(req)}`, 12, 3_600_000)) {
     return tooMany("Too many requests — try again in a bit.");
   }
