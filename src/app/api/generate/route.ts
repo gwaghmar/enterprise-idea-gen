@@ -391,14 +391,15 @@ CRITICAL — the rollout playbook, approvals, and vendor outreach MUST be tailor
 - alternative: propose ONE genuinely cheaper/faster/simpler fallback (Option B) with an honest tradeoff — do not just restate the main recommendation.
 - assumptions: honestly list every guess (volumes, seats, prices, integrations) so the user can correct them.
 - showHoursRoi: set false when the problem is NOT about repetitive time loss (e.g. strategy, governance, market-entry problems) — true otherwise.
-- Attach sourceUrl to each tool using the exact research citation that supports it.
+- Attach sourceUrl to each tool using the exact research citation that supports it. Same for insightSourceUrl, each TCO line item, and each evaluated candidate — every sourceUrl must be one of the provided citation URLs so the reader can verify each claim; omit when nothing supports it.
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
   "title": "Specific 4-8 word solution title",
   "insight": "The one thing most companies get wrong about this problem, in 1-2 sentences.",
+  "insightSourceUrl": "Citation URL that best supports the insight — must be one of the provided source URLs, or omit",
   "evaluated": [
-    { "name": "Candidate tool/approach", "verdict": "chosen", "reason": "One line, grounded in THIS company's real scenario (their stack, volumes, team skill, budget) — not generic pros/cons" },
+    { "name": "Candidate tool/approach", "verdict": "chosen", "reason": "One line, grounded in THIS company's real scenario (their stack, volumes, team skill, budget) — not generic pros/cons", "sourceUrl": "Citation URL supporting the verdict, or omit" },
     { "name": "Rejected candidate", "verdict": "rejected", "reason": "Why it loses for this specific scenario" }
   ],
   "summary": "2-3 sentences: what the solution is, which tools, and what measurable outcome they get.",
@@ -467,7 +468,7 @@ Return ONLY valid JSON, no markdown, no explanation:
   "timeToImplement": "Realistic timeline for ${size} with ${timeline} urgency",
   "tco": {
     "lineItems": [
-      { "item": "Exact cost line — e.g. Workato subscription", "type": "Recurring | One-time", "cost": "e.g. $2,000/mo or $5,000" }
+      { "item": "Exact cost line — e.g. Workato subscription", "type": "Recurring | One-time", "cost": "e.g. $2,000/mo or $5,000", "sourceUrl": "Citation URL supporting this price, or omit" }
     ],
     "oneTimeSetup": "Total one-time/setup cost — e.g. $6,500 (implementation + training + data migration)",
     "monthlyRecurring": "Total recurring — e.g. $2,400/mo",
