@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import OpenAI from "openai";
 import { put } from "@vercel/blob";
 import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
+import { normalizeSolution } from "@/lib/normalize-solution";
 
 // Checkpoint saved after each expensive pipeline stage so a dropped
 // connection can resume instead of re-buying research and synthesis
@@ -697,6 +698,10 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
             }
           }
         }
+
+        // Format guard — whatever the model produced, the report leaves in the
+        // exact shape the UI and PDF expect
+        solution = normalizeSolution(solution);
 
         const totalTokens = searchUsageTokens + tokenCount;
         act({ type: "done", text: "Solution assembled and ready" });
