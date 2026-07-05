@@ -24,3 +24,10 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
 }
+
+/* Text selection matches the app's blue action language instead of the
+   browser's default white/system highlight */
+::selection {
+  background: rgba(59, 130, 246, 0.4);
+  color: #fff;
+}
