@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   let body: {
     problem?: string; size?: string; stack?: string; budget?: string; timeline?: string;
     industry?: string; team?: string; seats?: string; techLevel?: string; compliance?: string;
-    clarification?: string; runId?: string;
+    clarification?: string; preferCloud?: string; runId?: string;
   };
   try {
     body = await req.json();
@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
   const seats = field(body.seats, 20);
   const techLevel = field(body.techLevel, 40);
   const compliance = field(body.compliance, 120);
+  const preferCloud = ["AWS", "Azure", "Google Cloud (GCP)"].includes(String(body.preferCloud)) ? String(body.preferCloud) : "";
 
   if (!problem) {
     return new Response(JSON.stringify({ error: "Problem is required" }), { status: 400 });
@@ -232,7 +233,7 @@ PROBLEM: "${problem}"`,
 ${profileBlock}
 
 Find and compare:
-1. The top 3-5 enterprise tools that solve this exact problem AND natively integrate with ${stack}, are appropriate for the ${industry} industry, and meet these compliance needs: ${compliance}
+${preferCloud ? `CLOUD PREFERENCE: the company's data lives on ${preferCloud} — strongly prefer ${preferCloud}-native services (no egress charges, existing enterprise discount, already inside their security boundary). Include the best ${preferCloud}-native option for every capability.\n` : ""}1. The top 3-5 enterprise tools that solve this exact problem AND natively integrate with ${stack}, are appropriate for the ${industry} industry, and meet these compliance needs: ${compliance}
 2. Real pricing for each tool at the ${size} tier for ~${seats} users (not just "contact sales" — find published pricing)
 3. A real case study of a ${size} ${industry} company that solved this same problem (name the company, tool used, outcome)
 4. The #1 mistake companies make when solving this problem
@@ -406,6 +407,7 @@ FRESHNESS — today is ${todayStr}: your training memory is months out of date, 
 
 INSTRUCTIONS:
 - EVALUATE 6-10 real candidate solutions (name real products/approaches from the research) against this company's ACTUAL scenario — their stack, volumes, team skill, compliance, and budget. List every candidate in "evaluated" with a chosen/rejected verdict and a scenario-grounded reason. Stress-test the winner against realistic day-to-day cases (edge inputs, outages, the team's actual skill level) before committing.
+${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${preferCloud}. Prefer ${preferCloud}-native services; price egress at zero and assume their existing ${preferCloud} enterprise agreement in the TCO; note in approvals that native services skip the new-vendor security review. Any NON-native tool you still recommend must explicitly justify why it beats the native option despite egress and a new vendor review. Mention in the summary that the plan is optimized for their ${preferCloud} environment.` : ""}
 - Pick ONE clear solution approach (don't hedge with "you could also...")
 - STAFF the plan: teamRequired lists every role needed to implement (2-5), each with concrete skills, realistic time commitment, the phases they're needed in, and an honest staffing verdict against the team's stated technical level (${techLevel}): "internal" if the existing team covers it, "upskill" if a short training closes the gap, "contractor" if they must hire — never pretend a no-code team can staff an engineering role
 - Lead with the insight most companies miss about this problem
@@ -733,7 +735,7 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           solution,
           problem: refinedProblem,       // the brief the report was built from
           originalProblem: problem,      // the user's own words, kept for reference
-          context: { size, stack, budget, timeline, industry, team, seats, techLevel, compliance },
+          context: { size, stack, budget, timeline, industry, team, seats, techLevel, compliance, preferCloud },
           citations, sourceMeta, activity: activityLog,
           model: "haiku (rewrite) → perplexity sonar ×4 (vendor·community·docs·cases) → jina ×5 → deepseek-v3.2",
           tokens: totalTokens,

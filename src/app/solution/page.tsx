@@ -186,6 +186,7 @@ interface Solution {
 interface Context {
   size: string; stack: string; budget: string; timeline: string;
   industry?: string; team?: string; seats?: string; techLevel?: string; compliance?: string;
+  preferCloud?: string;
 }
 interface SelectedItem { label: string; itemType: string; }
 
@@ -435,6 +436,7 @@ export default function SolutionPage() {
   const [expandedTool, setExpandedTool] = useState<number | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [shareMsg, setShareMsg] = useState("");
   const [exporting, setExporting] = useState(false);
   const [roiData, setRoiData] = useState<{ weeklyHours: number; teamSize: number; hourlyRate: number } | null>(null);
   const [askBtn, setAskBtn] = useState<{ text: string; top: number; left: number } | null>(null);
@@ -544,7 +546,59 @@ export default function SolutionPage() {
     return null;
   }
 
+  function summaryHtml(url: string | null): { html: string; text: string } {
+    if (!solution) return { html: "", text: "" };
+    const first = solution.tco?.firstYearTotal ?? solution.estimatedCost;
+    const teamN = solution.teamRequired?.length ?? 0;
+    const rejected = solution.evaluated?.filter((c) => c.verdict !== "chosen").length ?? 0;
+    const tools = solution.tools.map((t) => t.name).join(" · ");
+    const html = `<p>Hi,</p>
+<p>Sharing an implementation plan for our problem — generated with live vendor and community research.</p>
+<p><strong>${solution.title}</strong><br/>${solution.summary}</p>
+<p><strong>First-year total:</strong> ${first} · <strong>Timeline:</strong> ${solution.timeToImplement}${teamN ? ` · <strong>Team needed:</strong> ${teamN} roles` : ""}<br/>
+<strong>Tools:</strong> ${tools}${solution.evaluated?.length ? ` — ${solution.evaluated.length} candidates evaluated${rejected ? `, ${rejected} rejected (reasons in report)` : ""}` : ""}</p>
+${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
+<p><em>(PDF attached)</em></p>`;
+    const text = html.replace(/<br\/>/g, "\n").replace(/<[^>]+>/g, "").replace(/\n{3,}/g, "\n\n");
+    return { html, text };
+  }
+
   async function handleShare() {
+    // Native share sheet with the actual PDF attached, where the platform
+    // supports it (iOS/Android/most Windows+macOS Safari). Everywhere else:
+    // formatted summary to the clipboard + PDF download.
+    if (solution && context) {
+      try {
+        const { generatePDF } = await import("@/lib/generate-pdf");
+        const blob = await generatePDF(solution, problem, context, citations, roiData ?? undefined, { returnBlob: true }) as Blob;
+        const file = new File([blob], `${solution.title.replace(/[^a-z0-9]/gi, "_").slice(0, 40)}.pdf`, { type: "application/pdf" });
+        const url = await ensureShareUrl();
+        if (typeof navigator.share === "function" && navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: solution.title, text: `Implementation plan: ${solution.title}`, ...(url ? { url } : {}) });
+          return;
+        }
+        // Desktop fallback: rich summary to clipboard + download the PDF
+        const { html, text } = summaryHtml(url);
+        try {
+          await navigator.clipboard.write([new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([text], { type: "text/plain" }),
+          })]);
+        } catch { await navigator.clipboard.writeText(text); }
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        setShareMsg("Formatted summary copied — paste into your email. PDF downloaded to attach.");
+        setTimeout(() => setShareMsg(""), 6000);
+        return;
+      } catch { /* fall through to plain link copy */ }
+    }
+    await handleShareLink();
+  }
+
+  async function handleShareLink() {
     if (shareUrl) { navigator.clipboard.writeText(shareUrl); return; }
     setSharing(true);
     const url = await ensureShareUrl();
@@ -584,6 +638,7 @@ export default function SolutionPage() {
   const REMIXES: { key: string; label: string; instruction: string }[] = [
     { key: "cheaper", label: "Make it cheaper", instruction: "Rework this solution to cost significantly less: prefer cheaper tiers, open-source or existing-stack options, and cut nice-to-haves. Update tools, costs, TCO, phases and the alternative accordingly. Keep the same problem and quality bar." },
     { key: "faster", label: "Make it faster", instruction: "Compress this plan to deliver value in half the time: fewer tools, self-serve setup where possible, aggressive but realistic phase timelines. Update phases, exit criteria, costs and rollout accordingly." },
+    { key: "execs", label: "Explain for execs", instruction: "Rewrite the summary, insight, phase objectives, and adoption plan in plain business language for a non-technical executive: lead with money, time, and risk; no jargon or tool-internals; keep every number, tool name, cost, and the JSON structure exactly the same." },
     { key: "enterprise", label: "More enterprise-grade", instruction: "Upgrade this solution for a stricter enterprise environment: stronger compliance and security controls, SSO everywhere, vendor SLAs, formal change management. Update tools, approvals, risks, TCO and phases accordingly." },
   ];
 
@@ -716,11 +771,22 @@ export default function SolutionPage() {
         {/* Context badges */}
         {context && (
           <div className="flex flex-wrap gap-2 mb-8">
+            {context.preferCloud && (
+              <span data-cloudbadge className="text-xs bg-blue-500/10 border border-blue-500/40 rounded-full px-3 py-1 text-blue-300 font-medium">
+                ⚡ Optimized for your {context.preferCloud} environment
+              </span>
+            )}
             {[context.industry, context.size, context.team, context.seats ? `${context.seats} seats` : "", context.stack, context.budget, context.timeline, context.techLevel, context.compliance]
               .filter((v) => v && v !== "Not specified" && v !== "Not provided")
               .map((v, i) => (
                 <span key={i} className="text-xs bg-white/8 border border-white/15 rounded-full px-3 py-1 text-white/50">{v}</span>
               ))}
+          </div>
+        )}
+
+        {shareMsg && (
+          <div data-sharetoast className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-blue-500 text-white text-sm font-medium rounded-xl px-5 py-3 shadow-xl max-w-[90vw]">
+            {shareMsg}
           </div>
         )}
 

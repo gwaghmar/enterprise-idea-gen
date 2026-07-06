@@ -388,28 +388,33 @@ function MultiCombobox({ options, selected, onAdd, onRemove, placeholder }: {
   );
 }
 
-function MultiChips({ options, selected, onToggle, exclusive = [] }: {
+function MultiChips({ options, selected, onToggle, exclusive = [], detected = [] }: {
   options: string[];
   selected: string[];
   onToggle: (v: string) => void;
   exclusive?: string[];
+  detected?: string[]; // auto-selected from the problem text — green, tap to remove
 }) {
   return (
     <div className="flex flex-wrap gap-2">
       {options.map((o) => {
         const isSelected = selected.includes(o);
         const isExclusive = exclusive.includes(o);
+        const isDetected = detected.includes(o);
         return (
           <button key={o} type="button" onClick={() => onToggle(o)}
+            title={isDetected ? "Detected from your problem text — tap to remove" : undefined}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm border transition-all ${
               isSelected
-                ? isExclusive
-                  ? "bg-white/20 text-white border-white/50 font-medium"
-                  : "bg-white text-black border-white font-medium"
+                ? isDetected
+                  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/50 font-medium"
+                  : isExclusive
+                    ? "bg-white/20 text-white border-white/50 font-medium"
+                    : "bg-white text-black border-white font-medium"
                 : "bg-transparent text-white/50 border-white/20 hover:border-white/50 hover:text-white/80"
             }`}>
             {isSelected && !isExclusive && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
-            {o}
+            {o}{isDetected && <span className="text-[10px] uppercase tracking-wider opacity-70 ml-0.5">auto</span>}
           </button>
         );
       })}
@@ -487,6 +492,9 @@ export default function Home() {
   const [clarifyChoice, setClarifyChoice] = useState("");
   const [clarifyExtra, setClarifyExtra] = useState("");
   const [clarifying, setClarifying] = useState(false);
+  const [autoDetected, setAutoDetected] = useState<string[]>([]);
+  const [dismissedAuto, setDismissedAuto] = useState<string[]>([]);
+  const [preferCloud, setPreferCloud] = useState(false);
   const [factIdx, setFactIdx] = useState(0);
   const [hasHistory, setHasHistory] = useState(false);
   const router = useRouter();
@@ -527,6 +535,45 @@ export default function Home() {
 
   useEffect(() => { setHasHistory(listHistory().length > 0); }, []);
 
+  // Autofill ONLY tools the user literally names in the problem text —
+  // exact catalog matches, no inference ("CRM" never becomes "Salesforce").
+  // Auto-picked chips render green until manually confirmed or removed.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const text = problem.toLowerCase();
+      const nameHit = (name: string) => {
+        const n = name.toLowerCase().replace(/\s*\(.*\)$/, "");
+        if (n.length < 3) return false;
+        const idx = text.indexOf(n);
+        if (idx === -1) return false;
+        const before = idx === 0 ? " " : text[idx - 1];
+        const after = idx + n.length >= text.length ? " " : text[idx + n.length];
+        return !/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after);
+      };
+      const hits = [...STACKS.filter((x) => x !== "Recommend for me"), ...STACK_CATALOG]
+        .filter((name) => nameHit(name) && !dismissedAuto.includes(name));
+      setAutoDetected((prev) => {
+        const stale = prev.filter((n) => !hits.includes(n));
+        // add new hits that aren't already selected manually
+        hits.forEach((name) => {
+          if (prev.includes(name)) return;
+          if (STACKS.includes(name)) {
+            setStacks((st) => st.includes(name) ? st : [...st.filter((v) => v !== "Recommend for me"), name]);
+          } else {
+            setExtraStacks((ex) => ex.includes(name) ? ex : [...ex, name]);
+          }
+        });
+        // drop auto-picks the text no longer mentions
+        stale.forEach((name) => {
+          setStacks((st) => st.filter((v) => v !== name));
+          setExtraStacks((ex) => ex.filter((v) => v !== name));
+        });
+        return hits;
+      });
+    }, 500);
+    return () => clearTimeout(t);
+  }, [problem, dismissedAuto]);
+
   // After a failed run the user lands back on the form — bring the error
   // (and its Continue button) into view instead of leaving them at the top
   useEffect(() => {
@@ -552,6 +599,14 @@ export default function Home() {
       return;
     }
     // Any other selection clears "Recommend for me"
+    if (autoDetected.includes(v)) {
+      // Tapping a green auto-pick removes it and stops it re-adding
+      setDismissedAuto((d) => [...d, v]);
+      setAutoDetected((a) => a.filter((x) => x !== v));
+      setStacks((prev) => prev.filter((s) => s !== v));
+      setExtraStacks((prev) => prev.filter((s) => s !== v));
+      return;
+    }
     setStacks((prev) => {
       const without = prev.filter((s) => s !== "Recommend for me");
       return without.includes(v) ? without.filter((s) => s !== v) : [...without, v];
@@ -590,6 +645,8 @@ export default function Home() {
   }
 
   const resolvedStack = [...stacks, ...extraStacks].join(", ");
+  const CLOUDS = ["AWS", "Azure", "Google Cloud (GCP)"];
+  const detectedCloud = CLOUDS.find((c) => stacks.includes(c) || extraStacks.includes(c));
 
   const isReady = problem.trim() && size && (stacks.length > 0 || extraStacks.length > 0) && budget && timeline && industry.trim() && team;
 
@@ -667,6 +724,7 @@ export default function Home() {
       techLevel,
       compliance: compliance.join(", ") || "Not specified",
       clarification: clarificationText().slice(0, 500),
+      preferCloud: preferCloud && detectedCloud ? detectedCloud : "",
       runId: runIdRef.current,
     };
 
@@ -990,6 +1048,7 @@ export default function Home() {
           </div>
 
           {/* One-click example problems */}
+          {(!problem.trim() || EXAMPLES.some((ex) => ex.problem === problem)) && (
           <div data-examples className="space-y-2">
             <p className="text-white/35 text-xs uppercase tracking-wider flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" /> Sound familiar? One click fills everything
@@ -1003,6 +1062,7 @@ export default function Home() {
               ))}
             </div>
           </div>
+          )}
 
           <div className="space-y-4 bg-white/3 border border-white/10 rounded-2xl p-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1047,6 +1107,7 @@ export default function Home() {
                 selected={stacks}
                 onToggle={toggleStack}
                 exclusive={["Recommend for me"]}
+                detected={autoDetected}
               />
               <MultiCombobox
                 options={STACK_CATALOG}
@@ -1055,6 +1116,23 @@ export default function Home() {
                 onRemove={(v) => setExtraStacks((prev) => prev.filter((s) => s !== v))}
                 placeholder="Search any other tool — NetSuite, Workday, Zendesk… or type your own"
               />
+              {detectedCloud && (
+                <button
+                  type="button"
+                  data-cloudpin
+                  onClick={() => setPreferCloud((v) => !v)}
+                  className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-all ${
+                    preferCloud
+                      ? "border-blue-500/60 bg-blue-500/15 text-blue-300 font-medium"
+                      : "border-dashed border-blue-500/40 text-blue-400/70 hover:text-blue-300 hover:border-blue-400"
+                  }`}
+                >
+                  <Lightbulb className="w-3.5 h-3.5" />
+                  {preferCloud
+                    ? `Optimizing for ${detectedCloud} — native services, zero egress`
+                    : `Prefer building on ${detectedCloud}? Our data lives there`}
+                </button>
+              )}
               {stacks.includes("Recommend for me") && (
                 <p className="text-white/35 text-xs">
                   The AI will pick the best-fit tools with no assumptions about what you already run — recommendations won&apos;t be constrained to integrate with an existing stack.
