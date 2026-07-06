@@ -776,18 +776,18 @@ export default function SolutionPage() {
         {/* Problem */}
         <div className="mb-6">
           <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Your problem</p>
-          <p className="text-white/70 italic border-l-2 border-white/20 pl-4">{problem}</p>
+          <p className="text-white/70 italic border-l-2 border-white/20 pl-4 break-words">{problem}</p>
         </div>
 
         {/* Title + insight + summary */}
-        <h1 className="text-3xl sm:text-4xl font-bold mb-4">{solution.title}</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold mb-4 break-words">{solution.title}</h1>
         {solution.insight && (
           <div className="flex gap-3 bg-white/5 border border-white/15 rounded-xl px-5 py-4 mb-6 max-w-3xl">
             <Lightbulb className="w-5 h-5 text-yellow-400/70 shrink-0" />
             <p className="text-white/80 text-sm leading-relaxed italic">{solution.insight} <SourcePills url={solution.insightSourceUrl} urls={solution.insightSourceUrls} quote={solution.insightSourceQuote} /></p>
           </div>
         )}
-        <p className="text-white/60 text-lg mb-10 max-w-3xl">{solution.summary}</p>
+        <p className="text-white/60 text-lg mb-10 max-w-3xl break-words">{solution.summary}</p>
 
         {/* Executive Summary */}
         <div className="mb-12 bg-gradient-to-br from-white/5 to-white/2 border border-white/15 rounded-2xl p-6">
@@ -983,7 +983,7 @@ export default function SolutionPage() {
                 <div key={i} className="bg-white/5 border border-white/10 rounded-xl overflow-hidden transition-all hover:border-white/20">
                   <button onClick={() => pick(tool.name, "Tool")} className="w-full p-4 text-left space-y-2 group">
                     <div className="flex items-start justify-between gap-2">
-                      <span className="font-semibold text-white flex items-center gap-2">
+                      <span className="font-semibold text-white flex items-center gap-2 break-all min-w-0">
                         {tool.name}
                         {safeHttpUrl(tool.sourceUrl) && (
                           <a href={safeHttpUrl(tool.sourceUrl)!} target="_blank" rel="noopener noreferrer"
