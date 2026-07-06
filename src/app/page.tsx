@@ -997,7 +997,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-4 py-16">
+    <main className="min-h-screen bg-black text-white flex flex-col items-center px-4 pt-8 sm:pt-10 pb-16">
       <div className="max-w-2xl w-full">
         <div className="mb-10 text-center">
           {hasHistory && (
