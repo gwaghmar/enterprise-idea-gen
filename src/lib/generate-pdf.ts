@@ -16,6 +16,7 @@ interface AdoptionStep { title: string; detail: string; }
 interface Solution {
   title: string; insight?: string; summary: string; tools: Tool[]; assumptions?: string[];
   evaluated?: { name: string; verdict: string; reason: string }[];
+  teamRequired?: { role: string; skills?: string[]; commitment?: string; phases?: string; staffing?: string }[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
   rolloutPlaybook?: { stakeholders?: Stakeholder[]; tickets?: Ticket[] };
   approvals?: { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[] };
@@ -659,6 +660,31 @@ export async function generatePDF(
       }
       y += 8;
     });
+
+    // Team & skills — who implements this (the #1 asked question)
+    if (solution.teamRequired && solution.teamRequired.length > 0) {
+      flowRoom(30);
+      y = sectionLabel(doc, "Team & Skills Required", y);
+      solution.teamRequired.forEach((r) => {
+        flowRoom(16);
+        doc.setFontSize(8.5);
+        doc.setTextColor(...C.dark);
+        doc.setFont("helvetica", "bold");
+        const staffTag = r.staffing === "contractor" ? "[HIRE/CONTRACTOR]" : r.staffing === "upskill" ? "[UPSKILL]" : "[INTERNAL]";
+        doc.text(`${r.role}  ${staffTag}`, ML, y);
+        y += 4.5;
+        doc.setFontSize(7.5);
+        doc.setTextColor(...C.mid);
+        doc.setFont("helvetica", "normal");
+        const detail = [r.skills?.join(", "), r.commitment, r.phases].filter(Boolean).join("  ·  ");
+        if (detail) {
+          const dLines = doc.splitTextToSize(detail, CW - 4) as string[];
+          doc.text(dLines.slice(0, 2), ML + 2, y);
+          y += Math.min(dLines.length, 2) * 3.9 + 2;
+        }
+      });
+      y += 4;
+    }
 
     // Vendor questions follow the plan
     const toolsWithQs = solution.tools.filter((t) => t.vendorQuestions && t.vendorQuestions.length > 0).slice(0, 3);

@@ -175,12 +175,13 @@ interface Kpi { metric: string; baseline?: string; target: string; timeframe?: s
 interface AdoptionStep { title: string; detail: string; }
 interface Alternative { name: string; summary: string; tools?: string[]; estimatedCost?: string; tradeoff?: string; }
 interface Evaluated { name: string; verdict: string; reason: string; sourceUrl?: string; }
+interface TeamRole { role: string; skills?: string[]; commitment?: string; phases?: string; staffing?: string; }
 interface Solution {
   title: string; insight?: string; insightSourceUrl?: string; insightSourceUrls?: string[]; insightSourceQuote?: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
   rolloutPlaybook?: RolloutPlaybook; approvals?: Approvals; vendorOutreach?: VendorOutreach;
   tco?: Tco; kpis?: Kpi[]; adoptionPlan?: AdoptionStep[]; alternative?: Alternative;
-  assumptions?: string[]; showHoursRoi?: boolean; evaluated?: Evaluated[];
+  assumptions?: string[]; showHoursRoi?: boolean; evaluated?: Evaluated[]; teamRequired?: TeamRole[];
 }
 interface Context {
   size: string; stack: string; budget: string; timeline: string;
@@ -905,6 +906,39 @@ export default function SolutionPage() {
                   </ul>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Team & skills — the first real user question: who builds this? */}
+        {solution.teamRequired && solution.teamRequired.length > 0 && (
+          <div data-team className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Team & Skills Required</h2>
+            <p className="text-white/40 text-sm mb-4">Who you need to implement this — judged against your team&apos;s technical level.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {solution.teamRequired.map((r, i) => (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <span className="font-semibold text-white text-sm">{r.role}</span>
+                    <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 ${
+                      r.staffing === "contractor" ? "border-amber-500/40 text-amber-400/90"
+                      : r.staffing === "upskill" ? "border-blue-500/40 text-blue-400/90"
+                      : "border-emerald-500/30 text-emerald-400/80"}`}>
+                      {r.staffing === "contractor" ? "Hire / contractor" : r.staffing === "upskill" ? "Upskill your team" : "Your team covers it"}
+                    </span>
+                  </div>
+                  {r.skills && r.skills.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {r.skills.map((sk, j) => (
+                        <span key={j} className="text-[11px] bg-white/[0.06] border border-white/10 rounded-full px-2 py-0.5 text-white/55">{sk}</span>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-white/45 text-xs">
+                    {[r.commitment, r.phases].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         )}
