@@ -1009,16 +1009,18 @@ export default function Home() {
             </div>
           )}
           <div className="inline-block bg-white/10 border border-white/20 rounded-full px-4 py-1 text-sm mb-6 text-white/60">
-            PilotPlan — AI Solution Architect for your business
+            PilotPlan — AI Solution Architect
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
-            Describe a business problem.<br />
-            <span className="text-white/40">Get the tools, costs & rollout plan.</span>
+          <h1 className="text-3xl sm:text-5xl font-bold tracking-tight mb-3">
+            &ldquo;Figure out a solution and have a plan by Friday.&rdquo;
           </h1>
-          <p className="text-white/50 text-lg">
-            {FREE_MODE
-              ? "An AI consultant that researches live sources and builds your implementation plan — which tools to buy, what they'll really cost, how to roll them out, and the email to send the vendor. Free while in beta."
-              : "An AI consultant that researches live sources and builds your implementation plan — tools, real costs, rollout steps, and the vendor email. Review free — pay $1 only if you like it."}
+          <p className="text-white/70 text-lg font-medium mb-4">
+            Sound familiar? Paste it here — exactly like your boss said it.
+          </p>
+          <p className="text-white/50 text-base sm:text-lg">
+            PilotPlan finds the solution — the right tools for <em>your</em>{" "}stack, budget, and team — and hands you
+            the complete plan to implement it: rollout phases, real costs with sources, the people you&apos;ll need.
+            Researched live, not recalled from memory. <span className="text-white/80 font-medium">Two minutes, not a week.</span>
           </p>
         </div>
 
@@ -1192,12 +1194,12 @@ export default function Home() {
 
           <button type="submit" disabled={!isReady || clarifying}
             className="w-full bg-white text-black font-semibold rounded-2xl py-4 text-base hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-            {clarifying ? "One moment…" : "Generate Solution — Free Preview"}
+            {clarifying ? "One moment…" : "Get my plan — free"}
           </button>
         </form>
 
         <p className="text-center text-white/30 text-sm mt-6">
-          {FREE_MODE ? "Free during beta · Your reports auto-save to My Solutions" : "Preview is free · Pay $1 only after you approve"}
+          {FREE_MODE ? "Every number links to its source · Free during beta · Reports auto-save to My Solutions" : "Preview is free · Pay $1 only after you approve"}
         </p>
       </div>
     </main>
