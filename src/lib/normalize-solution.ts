@@ -91,6 +91,14 @@ export function normalizeSolution(raw: any): any {
       reason: str(c?.reason, 300),
       sourceUrl: httpUrl(c?.sourceUrl),
     })).filter((c: any) => c.name && c.reason).slice(0, 10),
+    teamRequired: arr(s.teamRequired).map((r: any) => ({
+      role: str(r?.role, 80),
+      skills: strArr(r?.skills, 4, 80),
+      commitment: str(r?.commitment, 90),
+      phases: str(r?.phases, 60),
+      staffing: /contract|hire|external|consult/i.test(str(r?.staffing, 40)) ? "contractor"
+        : /upskill|train|learn/i.test(str(r?.staffing, 40)) ? "upskill" : "internal",
+    })).filter((r: any) => r.role).slice(0, 6),
     assumptions: strArr(s.assumptions, 6, 300),
     showHoursRoi: s.showHoursRoi !== false,
     kpis: arr(s.kpis).map((k: any) => ({

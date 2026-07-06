@@ -407,6 +407,7 @@ FRESHNESS — today is ${todayStr}: your training memory is months out of date, 
 INSTRUCTIONS:
 - EVALUATE 6-10 real candidate solutions (name real products/approaches from the research) against this company's ACTUAL scenario — their stack, volumes, team skill, compliance, and budget. List every candidate in "evaluated" with a chosen/rejected verdict and a scenario-grounded reason. Stress-test the winner against realistic day-to-day cases (edge inputs, outages, the team's actual skill level) before committing.
 - Pick ONE clear solution approach (don't hedge with "you could also...")
+- STAFF the plan: teamRequired lists every role needed to implement (2-5), each with concrete skills, realistic time commitment, the phases they're needed in, and an honest staffing verdict against the team's stated technical level (${techLevel}): "internal" if the existing team covers it, "upskill" if a short training closes the gap, "contractor" if they must hire — never pretend a no-code team can staff an engineering role
 - Lead with the insight most companies miss about this problem
 - Choose tools that ACTUALLY integrate with ${stack} — verify from the research above
 - Match tool tier to ${budget} budget — no enterprise-only tools if budget is tight
@@ -502,6 +503,15 @@ Return ONLY valid JSON, no markdown, no explanation:
       ]
     }
   ],
+  "teamRequired": [
+    {
+      "role": "Concrete role name — e.g. Integration Engineer",
+      "skills": ["Specific skill", "Another — e.g. AWS Connect flows", "Max 4"],
+      "commitment": "e.g. ~50% for weeks 1-4, then 2 hrs/week",
+      "phases": "Which phases — e.g. Phase 1-2",
+      "staffing": "internal | upskill | contractor — judged against the team's stated technical level"
+    }
+  ],
   "estimatedCost": "Itemized: Tool A $X/mo + Tool B $Y/mo = $Z/mo total",
   "timeToImplement": "Realistic timeline for ${size} with ${timeline} urgency",
   "tco": {
@@ -574,6 +584,7 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           { key: "summary" },
           { key: "tools", narr: "Selecting the tool stack" },
           { key: "phases", narr: "Building the implementation phases" },
+          { key: "teamRequired", narr: "Sizing the team & skills needed" },
           { key: "estimatedCost", narr: "Itemizing the costs" },
           { key: "timeToImplement" },
           { key: "tco", narr: "Calculating total cost of ownership" },
