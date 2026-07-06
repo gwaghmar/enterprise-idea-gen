@@ -201,8 +201,9 @@ export async function generatePDF(
   problemRaw: string,
   context: Context,
   citations: string[],
-  roi?: ROI
-): Promise<void> {
+  roi?: ROI,
+  opts?: { returnBlob?: boolean }
+): Promise<void | Blob> {
   const solution = deepSanitize(solutionRaw);
   const problem = sanitizeText(problemRaw);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -1037,5 +1038,6 @@ export async function generatePDF(
     doc.text(line, W / 2, tocSlotY, { align: "center" });
   }
 
+  if (opts?.returnBlob) return doc.output("blob");
   doc.save(`${solution.title.replace(/[^a-z0-9]/gi, "_").slice(0, 40)}_Implementation_Plan.pdf`);
 }
