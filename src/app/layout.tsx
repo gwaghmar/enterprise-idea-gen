@@ -22,6 +22,11 @@ export const metadata: Metadata = {
     url: "https://pilotplan.vercel.app",
     siteName: "PilotPlan",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "PilotPlan — AI Solution Architect",
+    description: "Paste the problem. Get the full implementation plan — sourced, costed, boss-ready — in 2 minutes. Free during beta.",
+  },
 };
 
 export default function RootLayout({
