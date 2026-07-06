@@ -88,7 +88,8 @@ export async function POST(req: NextRequest) {
   const seats = field(body.seats, 20);
   const techLevel = field(body.techLevel, 40);
   const compliance = field(body.compliance, 120);
-  const preferCloud = ["AWS", "Azure", "Google Cloud (GCP)"].includes(String(body.preferCloud)) ? String(body.preferCloud) : "";
+  const ALLOWED_CLOUDS = ["AWS", "Azure", "Google Cloud", "Google Cloud (GCP)", "GCP"];
+  const preferCloud = String(body.preferCloud ?? "").split("+").map((c) => c.trim()).filter((c) => ALLOWED_CLOUDS.includes(c)).join(" + ");
 
   if (!problem) {
     return new Response(JSON.stringify({ error: "Problem is required" }), { status: 400 });
@@ -220,7 +221,7 @@ PROBLEM: "${problem}"`,
 - Industry: ${industry}
 - Company size: ${size}
 - Requesting team: ${team}
-- Number of users/seats: ${seats}
+- Number of users/seats (END USERS of the solution — the people who maintain/administer it belong in teamRequired, not here): ${seats}
 - Team technical level: ${techLevel}
 - Current tech stack: ${stack}
 - Compliance / data sensitivity: ${compliance}
@@ -233,7 +234,7 @@ PROBLEM: "${problem}"`,
 ${profileBlock}
 
 Find and compare:
-${preferCloud ? `CLOUD PREFERENCE: the company's data lives on ${preferCloud} — strongly prefer ${preferCloud}-native services (no egress charges, existing enterprise discount, already inside their security boundary). Include the best ${preferCloud}-native option for every capability.\n` : ""}1. The top 3-5 enterprise tools that solve this exact problem AND natively integrate with ${stack}, are appropriate for the ${industry} industry, and meet these compliance needs: ${compliance}
+${preferCloud ? `CLOUD PREFERENCE: the company's data lives on ${preferCloud} — strongly prefer services native to ${preferCloud.includes("+") ? "these clouds (place each workload on the cloud that already hosts the relevant data; avoid cross-cloud egress)" : "this cloud"} (no egress charges, existing enterprise discount, already inside their security boundary). Include the best cloud-native option for every capability.\n` : ""}1. The top 3-5 enterprise tools that solve this exact problem AND natively integrate with ${stack}, are appropriate for the ${industry} industry, and meet these compliance needs: ${compliance}
 2. Real pricing for each tool at the ${size} tier for ~${seats} users (not just "contact sales" — find published pricing)
 3. A real case study of a ${size} ${industry} company that solved this same problem (name the company, tool used, outcome)
 4. The #1 mistake companies make when solving this problem
@@ -378,7 +379,7 @@ COMPANY PROFILE:
 - Industry: ${industry}
 - Company size: ${size}
 - Requesting team: ${team}
-- Number of users/seats: ${seats}
+- Number of users/seats (END USERS of the solution — the people who maintain/administer it belong in teamRequired, not here): ${seats}
 - Team technical level: ${techLevel}
 - Current stack: ${stack}
 - Compliance / data sensitivity: ${compliance}
@@ -407,7 +408,7 @@ FRESHNESS — today is ${todayStr}: your training memory is months out of date, 
 
 INSTRUCTIONS:
 - EVALUATE 6-10 real candidate solutions (name real products/approaches from the research) against this company's ACTUAL scenario — their stack, volumes, team skill, compliance, and budget. List every candidate in "evaluated" with a chosen/rejected verdict and a scenario-grounded reason. Stress-test the winner against realistic day-to-day cases (edge inputs, outages, the team's actual skill level) before committing.
-${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${preferCloud}. Prefer ${preferCloud}-native services; price egress at zero and assume their existing ${preferCloud} enterprise agreement in the TCO; note in approvals that native services skip the new-vendor security review. Any NON-native tool you still recommend must explicitly justify why it beats the native option despite egress and a new vendor review. Mention in the summary that the plan is optimized for their ${preferCloud} environment.` : ""}
+${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${preferCloud}. Prefer services native to ${preferCloud.includes("+") ? `these clouds — place each workload on the cloud that already hosts the relevant data and avoid cross-cloud egress; if a workload could live on either, say which and why` : "this cloud"}; price intra-cloud egress at zero and assume their existing enterprise agreement(s) in the TCO; note in approvals that native services skip the new-vendor security review. Any NON-native tool you still recommend must explicitly justify why it beats the native option despite egress and a new vendor review. Mention in the summary that the plan is optimized for their ${preferCloud} environment.` : ""}
 - Pick ONE clear solution approach (don't hedge with "you could also...")
 - STAFF the plan: teamRequired lists every role needed to implement (2-5), each with concrete skills, realistic time commitment, the phases they're needed in, and an honest staffing verdict against the team's stated technical level (${techLevel}): "internal" if the existing team covers it, "upskill" if a short training closes the gap, "contractor" if they must hire — never pretend a no-code team can staff an engineering role
 - Lead with the insight most companies miss about this problem

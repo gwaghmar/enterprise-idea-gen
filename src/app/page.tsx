@@ -646,7 +646,8 @@ export default function Home() {
 
   const resolvedStack = [...stacks, ...extraStacks].join(", ");
   const CLOUDS = ["AWS", "Azure", "Google Cloud (GCP)"];
-  const detectedCloud = CLOUDS.find((c) => stacks.includes(c) || extraStacks.includes(c));
+  const detectedClouds = CLOUDS.filter((c) => stacks.includes(c) || extraStacks.includes(c));
+  const detectedCloud = detectedClouds.map((c) => c.replace(" (GCP)", "")).join(" + ");
 
   const isReady = problem.trim() && size && (stacks.length > 0 || extraStacks.length > 0) && budget && timeline && industry.trim() && team;
 
@@ -1071,7 +1072,7 @@ export default function Home() {
                 <Combobox options={INDUSTRIES} value={industry} onChange={setIndustry} placeholder="Type or pick an industry…" />
               </div>
               <div className="space-y-2">
-                <p className="text-white/40 text-xs uppercase tracking-wider">Users / seats <span className="text-white/25 normal-case tracking-normal">(optional)</span></p>
+                <p className="text-white/40 text-xs uppercase tracking-wider">Users / seats <span className="text-white/25 normal-case tracking-normal">(end users of the solution — optional)</span></p>
                 <input type="number" min="1" value={seats} onChange={(e) => setSeats(e.target.value)}
                   placeholder="e.g. 25"
                   className="w-full bg-white/5 border border-white/15 rounded-xl px-4 py-2.5 text-white placeholder:text-white/30 text-sm focus:outline-none focus:border-white/40" />
