@@ -56,7 +56,7 @@ Return ONLY the full valid JSON object — no markdown, no commentary.`;
 
   try {
     const res = await openrouter.chat.completions.create({
-      model: "deepseek/deepseek-v3.2",
+      model: "google/gemini-2.5-flash",
       max_tokens: 8000,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,

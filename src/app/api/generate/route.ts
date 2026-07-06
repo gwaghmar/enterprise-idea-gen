@@ -615,7 +615,7 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           send(controller, { progress: 92, step: 4, message: "Recovered your draft — finalizing..." });
         } else {
           const synthesisStream = await openrouter.chat.completions.create({
-            model: "deepseek/deepseek-v3.2",
+            model: "google/gemini-2.5-flash",
             stream: true,
             max_tokens: 8000,
             messages: [{ role: "user", content: synthesisPrompt }],
@@ -738,7 +738,7 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           originalProblem: problem,      // the user's own words, kept for reference
           context: { size, stack, budget, timeline, industry, team, seats, techLevel, compliance, preferCloud },
           citations, sourceMeta, activity: activityLog,
-          model: "haiku (rewrite) → perplexity sonar ×4 (vendor·community·docs·cases) → jina ×5 → deepseek-v3.2",
+          model: "haiku (rewrite) → perplexity sonar ×4 (vendor·community·docs·cases) → jina ×5 → gemini-2.5-flash",
           tokens: totalTokens,
         });
 
