@@ -382,6 +382,7 @@ COMPANY PROFILE:
 - Number of users/seats (END USERS of the solution — the people who maintain/administer it belong in teamRequired, not here): ${seats}
 - Team technical level: ${techLevel}
 - Current stack: ${stack}
+  (NOTE: this list is auto-populated from tool names typed anywhere in the problem statement, including tools only mentioned as a candidate being decided between — e.g. "evaluating X versus Y" adds BOTH X and Y here even though at most one is actually deployed. Do not assume every item in this list is live, deployed infrastructure. Read the problem statement itself to determine which stack items are truly in production today versus which are candidates under evaluation, and write tool-specific detail — especially permissions, integration steps, and TCO line items — only for tools that are actually deployed or actually chosen.)
 - Compliance / data sensitivity: ${compliance}
 - Budget: ${budget}/month
 - Timeline: ${timeline}
@@ -413,6 +414,7 @@ ${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${prefe
 - STAFF the plan: teamRequired lists every role needed to implement (2-5), each with concrete skills, realistic time commitment, the phases they're needed in, and an honest staffing verdict against the team's stated technical level (${techLevel}): "internal" if the existing team covers it, "upskill" if a short training closes the gap, "contractor" if they must hire — never pretend a no-code team can staff an engineering role
 - Lead with the insight most companies miss about this problem
 - Choose tools that ACTUALLY integrate with ${stack} — verify from the research above
+- If the problem describes a head-to-head decision between two or more specific tools (e.g. "X vs Y", "deciding between X and Y", "replace X with Y"), do NOT treat the losing candidate as already-deployed infrastructure anywhere in the report — no permissions, no federation/integration steps, no TCO line item for it unless it is explicitly kept as a supporting tool. Every permission/access item you list must state in plain language WHY it's needed (who uses it and for what), not just the raw privilege name
 - Match tool tier to ${budget} budget — no enterprise-only tools if budget is tight
 - Fit the ${industry} industry and satisfy compliance needs: ${compliance}
 - Match complexity to the team's technical level (${techLevel}) — no raw APIs for a no-code team
