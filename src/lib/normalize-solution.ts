@@ -39,6 +39,12 @@ function shortValue(v: unknown, maxLen: number): string {
 export function normalizeSolution(raw: any): any {
   const s = raw && typeof raw === "object" ? raw : {};
 
+  const lockInOf = (t: any) => {
+    const lvl = str(t?.lockIn?.level, 20).toLowerCase();
+    const level = lvl.includes("high") ? "high" : lvl.includes("low") ? "low" : lvl.includes("medium") ? "medium" : undefined;
+    const reason = str(t?.lockIn?.reason, 200);
+    return level && reason ? { level, reason } : undefined;
+  };
   const tools = arr(s.tools).map((t: any) => ({
     name: str(t?.name, 80) || "Unnamed tool",
     purpose: str(t?.purpose, 300),
@@ -46,6 +52,7 @@ export function normalizeSolution(raw: any): any {
     whyForYou: str(t?.whyForYou, 500),
     sourceUrl: httpUrl(t?.sourceUrl),
     vendorQuestions: strArr(t?.vendorQuestions, 5, 200),
+    lockIn: lockInOf(t),
   })).filter((t: any) => t.name !== "Unnamed tool" || t.purpose).slice(0, 8);
 
   const phases = arr(s.phases).map((p: any, i: number) => ({
@@ -80,6 +87,11 @@ export function normalizeSolution(raw: any): any {
     insightSourceUrls: arr(s.insightSourceUrls).map(httpUrl).filter(Boolean).slice(0, 3),
     insightSourceQuote: str(s.insightSourceQuote, 120) || undefined,
     summary: str(s.summary, 800),
+    costOfInaction: s.costOfInaction && typeof s.costOfInaction === "object" && str(s.costOfInaction.annualCost, 60) ? {
+      annualCost: str(s.costOfInaction.annualCost, 60),
+      basis: str(s.costOfInaction.basis, 250),
+      paybackPeriod: str(s.costOfInaction.paybackPeriod, 60) || undefined,
+    } : undefined,
     // The two fields that wrecked the mobile layout — hard-shortened here
     estimatedCost: shortValue(s.estimatedCost, 40),
     timeToImplement: shortValue(s.timeToImplement, 60),

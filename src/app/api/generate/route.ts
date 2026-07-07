@@ -430,6 +430,8 @@ CRITICAL — the rollout playbook, approvals, and vendor outreach MUST be tailor
 - adoptionPlan: 3-4 concrete steps to prevent this becoming shelfware (champion, training, rollout comms).
 - alternative: propose ONE genuinely cheaper/faster/simpler fallback (Option B) with an honest tradeoff — do not just restate the main recommendation.
 - assumptions: honestly list every guess (volumes, seats, prices, integrations) so the user can correct them.
+- costOfInaction: ground the annual cost in numbers the user actually stated (hours/week, error rate, team size, revenue at risk) — never invent a number with no basis in the problem or research; if nothing supports a real estimate, omit the whole field rather than guess.
+- lockIn: judge each tool honestly on contract terms, data portability, and proprietary formats — don't rate everything "low" to seem friendly; a tool with annual contracts and no data export IS high lock-in even if you recommended it.
 - showHoursRoi: set false when the problem is NOT about repetitive time loss (e.g. strategy, governance, market-entry problems) — true otherwise.
 - Attach sourceUrl to each tool using the exact research citation that supports it. Same for insightSourceUrl, each TCO line item, and each evaluated candidate — every sourceUrl must be one of the provided citation URLs so the reader can verify each claim; omit when nothing supports it. When SEVERAL citations support a claim, put the strongest in sourceUrl and up to 2 more in the matching sourceUrls array. Where you can, add a sourceQuote: a short phrase copied VERBATIM from the source content above (never paraphrased) — it deep-links the reader to the exact spot.
 
@@ -445,6 +447,11 @@ Return ONLY valid JSON, no markdown, no explanation:
     { "name": "Rejected candidate", "verdict": "rejected", "reason": "Why it loses for this specific scenario" }
   ],
   "summary": "2-3 sentences: what the solution is, which tools, and what measurable outcome they get.",
+  "costOfInaction": {
+    "annualCost": "What NOT solving this costs per year, grounded in the numbers in the problem statement — e.g. '~$180,000/year' — omit the whole costOfInaction object if you cannot ground this in a real number from the problem",
+    "basis": "One line showing the math — e.g. '15 hrs/week manual work x loaded analyst cost + ~8% error rate delaying month-end close'",
+    "paybackPeriod": "How fast this plan pays for itself against that cost — e.g. '~2.3 months'"
+  },
   "tools": [
     {
       "name": "Exact product name",
@@ -452,6 +459,7 @@ Return ONLY valid JSON, no markdown, no explanation:
       "sourceUrl": "The research citation URL that supports this tool's pricing/claims — must be one of the provided source URLs, or omit",
       "category": "One of: Integration | Automation | CRM | Analytics | Storage | Security | Infrastructure | Communication",
       "whyForYou": "Why this tool for ${size} on ${stack} within ${budget} — be specific",
+      "lockIn": { "level": "low | medium | high — how hard is this to leave in 2 years", "reason": "One line — e.g. 'Recipes export as JSON; month-to-month after year 1' or 'Proprietary data format, annual contract, high migration cost'" },
       "vendorQuestions": [
         "Specific question about native ${stack} integration",
         "Question about pricing at ${size} scale",
@@ -585,6 +593,7 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           { key: "insight", narr: "Leading with the key insight" },
           { key: "evaluated", narr: "Evaluating candidate solutions against your scenario" },
           { key: "summary" },
+          { key: "costOfInaction", narr: "Pricing what doing nothing costs" },
           { key: "tools", narr: "Selecting the tool stack" },
           { key: "phases", narr: "Building the implementation phases" },
           { key: "teamRequired", narr: "Sizing the team & skills needed" },

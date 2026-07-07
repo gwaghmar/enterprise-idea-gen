@@ -3,7 +3,7 @@ import Dagre from "@dagrejs/dagre";
 
 interface FlowNode { id: string; label: string; type: string; }
 interface FlowEdge { from: string; to: string; label?: string; }
-interface Tool { name: string; purpose: string; category: string; whyForYou: string; vendorQuestions?: string[]; }
+interface Tool { name: string; purpose: string; category: string; whyForYou: string; vendorQuestions?: string[]; lockIn?: { level: string; reason: string }; }
 interface Phase { title: string; objective?: string; actions: string[]; exitCriteria?: string[]; nodes?: FlowNode[]; edges?: FlowEdge[]; }
 interface Stakeholder { role: string; team: string; responsibility: string; whenToContact: string; }
 interface Ticket { system: string; type: string; title: string; assignTo: string; }
@@ -15,6 +15,7 @@ interface Kpi { metric: string; baseline?: string; target: string; timeframe?: s
 interface AdoptionStep { title: string; detail: string; }
 interface Solution {
   title: string; insight?: string; summary: string; tools: Tool[]; assumptions?: string[];
+  costOfInaction?: { annualCost: string; basis: string; paybackPeriod?: string };
   evaluated?: { name: string; verdict: string; reason: string }[];
   teamRequired?: { role: string; skills?: string[]; commitment?: string; phases?: string; staffing?: string }[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
@@ -427,6 +428,25 @@ export async function generatePDF(
   });
   y += boxH + 8;
 
+  // Cost of inaction — the box that gets budget approved
+  if (solution.costOfInaction) {
+    const c = solution.costOfInaction;
+    doc.setFontSize(6.8);
+    doc.setTextColor(190, 40, 40);
+    doc.setFont("helvetica", "bold");
+    doc.text("WHAT DOING NOTHING COSTS YOU", ML, y + 1);
+    y += 5;
+    doc.setFontSize(13);
+    doc.setTextColor(...C.dark);
+    doc.text(c.annualCost, ML, y + 4);
+    y += 6.5;
+    y = wrapText(doc, c.basis, ML, y + 1, CW, 7.8, C.mid, "normal");
+    if (c.paybackPeriod) {
+      y = wrapText(doc, `vs. this plan: ${shortCost(solution.estimatedCost)} first year -> pays for itself in ${c.paybackPeriod}`, ML, y + 1, CW, 7.8, C.dark, "italic");
+    }
+    y += 4;
+  }
+
   // ROI section if provided
   if (roi && roi.weeklyHours > 0) {
     const monthly = roi.weeklyHours * 4.3 * roi.teamSize * roi.hourlyRate;
@@ -502,7 +522,10 @@ export async function generatePDF(
     const whyLines = tool.whyForYou
       ? (doc.splitTextToSize(`Why for you: ${tool.whyForYou}`, CW - 10) as string[]).slice(0, 3)
       : [];
-    const cardH = 9 + purposeLines.length * 3.9 + (whyLines.length ? whyLines.length * 3.7 + 2.5 : 0) + 3;
+    const lockLines = tool.lockIn
+      ? (doc.splitTextToSize(`Exit difficulty: ${tool.lockIn.level.toUpperCase()} — ${tool.lockIn.reason}`, CW - 10) as string[]).slice(0, 2)
+      : [];
+    const cardH = 9 + purposeLines.length * 3.9 + (whyLines.length ? whyLines.length * 3.7 + 2.5 : 0) + (lockLines.length ? lockLines.length * 3.7 + 2 : 0) + 3;
     if (y + cardH > H - 22) { pageNum(page); doc.addPage(); page++; y = MT + 10; doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F"); }
 
     doc.setFillColor(...C.white);
@@ -528,6 +551,13 @@ export async function generatePDF(
       doc.setTextColor(...C.mid);
       doc.setFont("helvetica", "italic");
       doc.text(whyLines, ML + 5, y + 11 + purposeLines.length * 3.9 + 1.5);
+    }
+    if (lockLines.length && tool.lockIn) {
+      const lockColor: [number, number, number] = tool.lockIn.level === "high" ? [180, 40, 40] : tool.lockIn.level === "medium" ? [180, 130, 10] : [5, 150, 105];
+      doc.setFontSize(7);
+      doc.setTextColor(...lockColor);
+      doc.setFont("helvetica", "normal");
+      doc.text(lockLines, ML + 5, y + 11 + purposeLines.length * 3.9 + (whyLines.length ? whyLines.length * 3.7 + 2.5 : 1.5) + 2);
     }
     y += cardH + 3;
   });
