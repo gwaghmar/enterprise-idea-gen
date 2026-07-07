@@ -489,7 +489,7 @@ export default function Home() {
   const [errorQuip, setErrorQuip] = useState("");
   const [resumable, setResumable] = useState(false);
   const [clarify, setClarify] = useState<{ question: string; options: string[] } | null>(null);
-  const [clarifyChoice, setClarifyChoice] = useState("");
+  const [clarifyChoice, setClarifyChoice] = useState<string[]>([]);
   const [clarifyExtra, setClarifyExtra] = useState("");
   const [clarifying, setClarifying] = useState(false);
   const [autoDetected, setAutoDetected] = useState<string[]>([]);
@@ -666,7 +666,7 @@ export default function Home() {
       const data = await res.json();
       if (res.ok && data.question && Array.isArray(data.options) && data.options.length >= 2) {
         setClarify({ question: data.question, options: data.options });
-        setClarifyChoice("");
+        setClarifyChoice([]);
         setClarifyExtra("");
         setClarifying(false);
         return; // wait for the user's answer (or skip)
@@ -678,7 +678,7 @@ export default function Home() {
 
   function clarificationText() {
     const parts = [];
-    if (clarify && clarifyChoice) parts.push(`${clarify.question} ${clarifyChoice}`);
+    if (clarify && clarifyChoice.length) parts.push(`${clarify.question} ${clarifyChoice.join(", ")}`);
     if (clarifyExtra.trim()) parts.push(clarifyExtra.trim());
     return parts.join(". ");
   }
@@ -844,13 +844,18 @@ export default function Home() {
             <Sparkles className="w-3.5 h-3.5" /> One quick question — makes your report far more accurate
           </p>
           <h2 className="text-2xl font-bold">{clarify.question}</h2>
+          <p className="text-white/35 text-xs">Select all that apply</p>
           <div className="flex flex-col gap-2">
-            {clarify.options.map((o) => (
-              <button key={o} type="button" onClick={() => setClarifyChoice(clarifyChoice === o ? "" : o)}
-                className={`text-left px-4 py-3 rounded-xl border text-sm transition-all ${clarifyChoice === o ? "border-blue-500/60 bg-blue-500/10 text-white" : "border-white/15 bg-white/5 text-white/60 hover:border-white/40 hover:text-white"}`}>
-                {clarifyChoice === o && <Check className="w-3.5 h-3.5 inline mr-2 text-blue-400" />}{o}
-              </button>
-            ))}
+            {clarify.options.map((o) => {
+              const selected = clarifyChoice.includes(o);
+              return (
+                <button key={o} type="button"
+                  onClick={() => setClarifyChoice(selected ? clarifyChoice.filter((c) => c !== o) : [...clarifyChoice, o])}
+                  className={`text-left px-4 py-3 rounded-xl border text-sm transition-all ${selected ? "border-blue-500/60 bg-blue-500/10 text-white" : "border-white/15 bg-white/5 text-white/60 hover:border-white/40 hover:text-white"}`}>
+                  {selected && <Check className="w-3.5 h-3.5 inline mr-2 text-blue-400" />}{o}
+                </button>
+              );
+            })}
           </div>
           <input
             value={clarifyExtra}
@@ -862,7 +867,7 @@ export default function Home() {
           <div className="flex gap-3">
             <button type="button" onClick={() => runGeneration(false)}
               className="flex-1 bg-white text-black font-semibold rounded-xl py-3.5 text-sm hover:bg-white/90 transition-all">
-              {clarifyChoice || clarifyExtra.trim() ? "Continue — generate my report" : "Skip — generate anyway"}
+              {clarifyChoice.length || clarifyExtra.trim() ? "Continue — generate my report" : "Skip — generate anyway"}
             </button>
           </div>
         </div>
