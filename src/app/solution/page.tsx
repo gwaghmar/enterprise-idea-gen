@@ -440,6 +440,7 @@ export default function SolutionPage() {
   const [sharing, setSharing] = useState(false);
   const [shareMsg, setShareMsg] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [roiData, setRoiData] = useState<{ weeklyHours: number; teamSize: number; hourlyRate: number } | null>(null);
   const [askBtn, setAskBtn] = useState<{ text: string; top: number; left: number } | null>(null);
   const [sid, setSid] = useState<string | null>(null);
@@ -711,6 +712,26 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
     }
   }
 
+  async function handleExportExcel() {
+    if (!solution) return;
+    if (!unlocked) { handleApprove(); return; }
+    setExportingExcel(true);
+    try {
+      const { generateExcel } = await import("@/lib/generate-excel");
+      const buf = await generateExcel(solution, problem);
+      const blob = new Blob([buf as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(solution.title || "implementation-plan").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-tracker.xlsx`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      console.error("Excel export failed", e);
+    } finally {
+      setExportingExcel(false);
+    }
+  }
+
   async function handleApprove() {
     setPaying(true);
     try {
@@ -761,6 +782,11 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
             <button onClick={handleShare} disabled={sharing}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm border border-white/15 text-white/60 hover:text-white hover:border-white/30 disabled:opacity-50 transition-all">
               {sharing ? "Saving..." : shareUrl ? "Link copied!" : "Share"}
+            </button>
+            <button onClick={handleExportExcel} disabled={exportingExcel}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm border border-white/15 text-white/60 hover:text-white hover:border-white/30 disabled:opacity-50 transition-all">
+              {!unlocked && <Lock className="w-3.5 h-3.5" />}
+              {exportingExcel ? "Building..." : "Download Tracker (Excel)"}
             </button>
             <button onClick={handleExport} disabled={exporting}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm bg-white text-black font-semibold hover:bg-white/90 disabled:opacity-50 transition-all">
@@ -1550,6 +1576,10 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                 <button onClick={handleExport} disabled={exporting}
                   className="bg-white text-black font-semibold rounded-xl px-8 py-3 hover:bg-white/90 disabled:opacity-50 transition-all">
                   {exporting ? "Exporting..." : "Export PDF"}
+                </button>
+                <button onClick={handleExportExcel} disabled={exportingExcel}
+                  className="border border-white/20 text-white/80 font-semibold rounded-xl px-8 py-3 hover:border-white/40 hover:text-white disabled:opacity-50 transition-all">
+                  {exportingExcel ? "Building..." : "Download Tracker (Excel)"}
                 </button>
                 <button onClick={() => router.push("/")}
                   className="border border-white/20 text-white/60 font-medium rounded-xl px-8 py-3 hover:border-white/40 hover:text-white/80 transition-all">
