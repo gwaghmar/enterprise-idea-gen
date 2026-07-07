@@ -766,7 +766,9 @@ export default function Home() {
             if (data.activity && !data.done) { setActivityFeed((prev) => [...prev, data.activity]); continue; }
             // Completed report sections stream in as partials for the live preview
             if (data.partial && !data.done) { setPreview((prev) => ({ ...prev, [data.partial.key]: data.partial.value })); continue; }
-            setProgress(data.progress ?? 0);
+            // Never let a progress-less event or an out-of-order chunk yank the
+            // ring backwards — it reads as "stuck" or "restarted" to the user
+            if (typeof data.progress === "number") setProgress((p) => Math.max(p, data.progress));
             if (data.message) setStepMessage(data.message);
             if (data.step) {
               setCurrentStep(data.step);

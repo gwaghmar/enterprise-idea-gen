@@ -635,9 +635,12 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
             const delta = chunk.choices[0]?.delta?.content || "";
             fullContent += delta;
             tokenCount++;
-            if (tokenCount % 10 === 0) {
-              // ~4800 tokens for a full report → map onto 45..95
-              const progress = 45 + Math.min(50, Math.floor((tokenCount / 4800) * 50));
+            {
+              // Progress by characters, not chunk count — Gemini streams large
+              // multi-hundred-token deltas (~100 chunks/report), so a chunk-based
+              // estimate froze the ring at ~46% for the whole synthesis.
+              // A full report is ~26,000 chars → map onto 45..95.
+              const progress = 45 + Math.min(50, Math.floor((fullContent.length / 26000) * 50));
               send(controller, { progress, step: 3, message: "Writing your report..." });
               while (narrIdx < SECTIONS.length && fullContent.includes(`"${SECTIONS[narrIdx].key}"`)) {
                 if (SECTIONS[narrIdx].narr) act({ type: "synth", text: SECTIONS[narrIdx].narr! });
