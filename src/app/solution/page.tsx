@@ -154,9 +154,10 @@ function ticketText(t: Ticket, problem: string): string {
 
 const FlowChart = dynamic(() => import("@/components/FlowChart"), { ssr: false });
 
+interface LockIn { level: string; reason: string; }
 interface Tool {
   name: string; purpose: string; category: string;
-  whyForYou: string; vendorQuestions?: string[]; sourceUrl?: string;
+  whyForYou: string; vendorQuestions?: string[]; sourceUrl?: string; lockIn?: LockIn;
 }
 interface FlowNode { id: string; label: string; type: string; }
 interface FlowEdge { from: string; to: string; label?: string; }
@@ -182,6 +183,7 @@ interface Solution {
   rolloutPlaybook?: RolloutPlaybook; approvals?: Approvals; vendorOutreach?: VendorOutreach;
   tco?: Tco; kpis?: Kpi[]; adoptionPlan?: AdoptionStep[]; alternative?: Alternative;
   assumptions?: string[]; showHoursRoi?: boolean; evaluated?: Evaluated[]; teamRequired?: TeamRole[];
+  costOfInaction?: { annualCost: string; basis: string; paybackPeriod?: string };
 }
 interface Context {
   size: string; stack: string; budget: string; timeline: string;
@@ -853,7 +855,24 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
             <p className="text-white/80 text-sm leading-relaxed italic">{solution.insight} <SourcePills url={solution.insightSourceUrl} urls={solution.insightSourceUrls} quote={solution.insightSourceQuote} /></p>
           </div>
         )}
-        <p className="text-white/60 text-lg mb-10 max-w-3xl break-words">{solution.summary}</p>
+        <p className="text-white/60 text-lg mb-6 max-w-3xl break-words">{solution.summary}</p>
+
+        {/* Cost of inaction — the line that gets budget approved */}
+        {solution.costOfInaction && (
+          <div data-cost-of-inaction className="mb-10 max-w-3xl bg-red-500/[0.06] border border-red-500/25 rounded-2xl px-5 py-4">
+            <p className="text-red-400/90 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5" /> What doing nothing costs you
+            </p>
+            <p className="text-white text-2xl font-bold mb-1">{solution.costOfInaction.annualCost}</p>
+            <p className="text-white/50 text-sm mb-2">{solution.costOfInaction.basis}</p>
+            {solution.costOfInaction.paybackPeriod && (
+              <p className="text-white/70 text-sm">
+                vs. this plan: <span className="text-white font-semibold">{solution.tco?.firstYearTotal ?? solution.estimatedCost}</span> first year
+                → pays for itself in <span className="text-emerald-400 font-semibold">{solution.costOfInaction.paybackPeriod}</span>
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Executive Summary */}
         <div className="mb-12 bg-gradient-to-br from-white/5 to-white/2 border border-white/15 rounded-2xl p-6">
@@ -1068,6 +1087,14 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                         <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Why for you</p>
                         <p className="text-white/70 text-sm">{tool.whyForYou}</p>
                       </div>
+                    )}
+                    {tool.lockIn && (
+                      <p className={`text-xs flex items-start gap-1.5 pt-1 ${
+                        tool.lockIn.level === "high" ? "text-red-400/80" : tool.lockIn.level === "medium" ? "text-amber-400/80" : "text-emerald-400/80"
+                      }`}>
+                        <span className="shrink-0">{tool.lockIn.level === "high" ? "🔐" : tool.lockIn.level === "medium" ? "🔒" : "🔓"}</span>
+                        <span>Exit difficulty: {tool.lockIn.level.toUpperCase()} — {tool.lockIn.reason}</span>
+                      </p>
                     )}
                     <p className="text-xs text-white/25 group-hover:text-white/50 transition-colors pt-1 flex items-center gap-1">Click to learn more <ArrowRight className="w-3 h-3" /></p>
                   </button>
