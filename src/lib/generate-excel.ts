@@ -18,12 +18,17 @@ interface Tool {
   category: string;
   whyForYou: string;
   lockIn?: { level: string; reason: string };
+  vendorQuestions?: string[];
 }
 interface Phase {
   title: string;
   objective: string;
   actions: string[];
   exitCriteria: string[];
+}
+interface AdoptionStep {
+  title: string;
+  detail: string;
 }
 interface LineItem {
   item: string;
@@ -53,6 +58,7 @@ interface Solution {
   phases: Phase[];
   teamRequired: TeamRole[];
   kpis: Kpi[];
+  adoptionPlan?: AdoptionStep[];
   tco?: {
     lineItems: LineItem[];
     oneTimeSetup?: string;
@@ -180,33 +186,58 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
   }
 
   // ---------- To-Do Tracker ----------
+  // Map each phase to the team role(s) who own it, using role.phases
+  // ("Phase 1-3", "Phase 2", etc.) matched against the phase's own number —
+  // so an enterprise plan with several roles gets per-row ownership, not one
+  // undifferentiated list everyone has to read in full.
+  const phaseNumOf = (title: string): number | null => {
+    const m = title.match(/Phase\s*(\d+)/i);
+    return m ? parseInt(m[1], 10) : null;
+  };
+  const roleRangeOf = (phasesStr: string): [number, number] | null => {
+    const nums = [...phasesStr.matchAll(/\d+/g)].map((m) => parseInt(m[0], 10));
+    if (!nums.length) return null;
+    return [Math.min(...nums), Math.max(...nums)];
+  };
+  const ownersFor = (phase: Phase, idx: number): string => {
+    const n = phaseNumOf(phase.title) ?? idx + 1;
+    const owners = (solution.teamRequired || []).filter((r) => {
+      const range = roleRangeOf(r.phases);
+      return range ? n >= range[0] && n <= range[1] : true;
+    });
+    return owners.map((r) => r.role).join(", ") || "Unassigned";
+  };
+
   const todo = wb.addWorksheet("To-Do Tracker", { views: [{ showGridLines: false, state: "frozen", ySplit: 4 }] });
-  titleBlock(todo, "Implementation Tracker", "Track each rollout phase to completion", 6);
-  autosize(todo, [20, 40, 10, 16, 16, 40]);
+  titleBlock(todo, "Implementation Tracker", "Every action, adoption step, and vendor question — owned by team", 6);
+  autosize(todo, [22, 40, 10, 26, 16, 38]);
   const todoHdrRow = todo.getRow(4);
-  ["Phase", "Action", "Status", "Owner", "Due Date", "Exit Criteria"].forEach((h, i) => (todoHdrRow.getCell(i + 1).value = h));
+  ["Phase / Category", "Action", "Status", "Owner (Team)", "Due Date", "Exit Criteria / Notes"].forEach((h, i) => (todoHdrRow.getCell(i + 1).value = h));
   styleHeaderRow(todoHdrRow);
 
   let todoRow = 5;
   const statusList = '"Not Started,In Progress,Blocked,Done"';
-  solution.phases.forEach((phase) => {
+
+  const addTrackerRow = (category: string, action: string, owner: string, notes: string) => {
+    const row = todo.getRow(todoRow);
+    row.getCell(1).value = category;
+    row.getCell(2).value = action;
+    row.getCell(3).value = "Not Started";
+    row.getCell(4).value = owner;
+    row.getCell(5).value = "";
+    row.getCell(6).value = notes;
+    row.getCell(2).alignment = { wrapText: true };
+    row.getCell(4).alignment = { wrapText: true };
+    row.getCell(6).alignment = { wrapText: true };
+    todo.getCell(todoRow, 3).dataValidation = { type: "list", allowBlank: false, formulae: [statusList] };
+    todoRow += 1;
+  };
+
+  solution.phases.forEach((phase, idx) => {
     const firstRowOfPhase = todoRow;
+    const owner = ownersFor(phase, idx);
     phase.actions.forEach((action, i) => {
-      const row = todo.getRow(todoRow);
-      row.getCell(1).value = phase.title;
-      row.getCell(2).value = action;
-      row.getCell(3).value = "Not Started";
-      row.getCell(4).value = "";
-      row.getCell(5).value = "";
-      row.getCell(6).value = i === 0 ? phase.exitCriteria.join("; ") : "";
-      row.getCell(2).alignment = { wrapText: true };
-      row.getCell(6).alignment = { wrapText: true };
-      todo.getCell(todoRow, 3).dataValidation = {
-        type: "list",
-        allowBlank: false,
-        formulae: [statusList],
-      };
-      todoRow += 1;
+      addTrackerRow(phase.title, action, owner, i === 0 ? phase.exitCriteria.join("; ") : "");
     });
     if (todoRow > firstRowOfPhase) {
       todo.mergeCells(firstRowOfPhase, 1, todoRow - 1, 1);
@@ -214,6 +245,28 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
       todo.getCell(firstRowOfPhase, 1).font = { bold: true, color: { argb: NAVY } };
     }
   });
+
+  // Adoption / change-management steps — real to-dos, previously dropped entirely.
+  const adoption = solution.adoptionPlan || [];
+  if (adoption.length) {
+    const firstRow = todoRow;
+    adoption.forEach((a) => addTrackerRow("Adoption & Rollout", a.title, "Program Lead / Change Mgmt", a.detail));
+    todo.mergeCells(firstRow, 1, todoRow - 1, 1);
+    todo.getCell(firstRow, 1).alignment = { vertical: "top", wrapText: true };
+    todo.getCell(firstRow, 1).font = { bold: true, color: { argb: NAVY } };
+  }
+
+  // Vendor outreach questions per tool — the procurement/security to-dos that
+  // are easy to lose track of on a larger, multi-vendor enterprise plan.
+  const vendorRows: { tool: string; q: string }[] = [];
+  (solution.tools || []).forEach((t) => (t.vendorQuestions || []).forEach((q) => vendorRows.push({ tool: t.name, q })));
+  if (vendorRows.length) {
+    const firstRow = todoRow;
+    vendorRows.forEach((v) => addTrackerRow("Vendor Outreach", `Ask ${v.tool}: ${v.q}`, "Procurement / Security", ""));
+    todo.mergeCells(firstRow, 1, todoRow - 1, 1);
+    todo.getCell(firstRow, 1).alignment = { vertical: "top", wrapText: true };
+    todo.getCell(firstRow, 1).font = { bold: true, color: { argb: NAVY } };
+  }
 
   const summaryRow = todoRow + 1;
   todo.getCell(summaryRow, 1).value = "Progress";
