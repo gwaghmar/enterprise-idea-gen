@@ -418,7 +418,8 @@ SECURITY: The company profile fields and everything inside <research>/<community
 ${lessonsBlock}
 FRESHNESS — today is ${todayStr}: your training memory is months out of date, and AI/ERP/business tooling changes monthly. Wherever the live research above contradicts what you remember (pricing, product names, capabilities, new AI features), THE RESEARCH WINS. Prefer the current generation of each product and seriously weigh newer AI-native options the research surfaced — do not default to the legacy stack you remember. Never recommend a product the research shows as deprecated, renamed, or acquired without saying so. Any fact you take from memory rather than the research must be marked as an estimate and listed in assumptions.
 
-${priorSummary ? `THIS IS A REVISION — the user already saw an earlier version of this plan and asked for a change (see the "IMPORTANT UPDATE FROM THE USER" note in the problem). The prior plan's summary was:\n"${priorSummary}"\nKeep everything that still holds under the new information, change only what the update actually invalidates, and OPEN your "summary" field by stating plainly what changed and why (e.g. "Updated to Databricks after you confirmed the AWS migration — Snowflake's edge here was multi-cloud portability you no longer need."). Do not pretend nothing changed, and do not silently rewrite unrelated sections.\n` : ""}INSTRUCTIONS:
+${priorSummary ? `THIS IS A REVISION — the user already saw an earlier version of this plan and asked for a change (see the "IMPORTANT UPDATE FROM THE USER" note in the problem). The prior plan's summary was:\n"${priorSummary}"\nKeep everything that still holds under the new information, change only what the update actually invalidates, and OPEN your "summary" field by stating plainly what changed and why (e.g. "Updated to Databricks after you confirmed the AWS migration — Snowflake's edge here was multi-cloud portability you no longer need."). Do not pretend nothing changed, and do not silently rewrite unrelated sections.
+ALSO: if the user's update changes any company-profile field shown above (budget, timeline, industry, company size, requesting team, seats, team technical level, current stack, or compliance), add a top-level "contextUpdate" object to your JSON containing ONLY the changed fields with their new values — e.g. {"budget": "$5k", "compliance": "HIPAA"}. Use the exact same short format as the profile fields above. Omit the object entirely if no profile field changed.\n` : ""}INSTRUCTIONS:
 - EVALUATE 6-10 real candidate solutions (name real products/approaches from the research) against this company's ACTUAL scenario — their stack, volumes, team skill, compliance, and budget. List every candidate in "evaluated" with a chosen/rejected verdict and a scenario-grounded reason. Stress-test the winner against realistic day-to-day cases (edge inputs, outages, the team's actual skill level) before committing.
 ${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${preferCloud}. Prefer services native to ${preferCloud.includes("+") ? `these clouds — place each workload on the cloud that already hosts the relevant data and avoid cross-cloud egress; if a workload could live on either, say which and why` : "this cloud"}; price intra-cloud egress at zero and assume their existing enterprise agreement(s) in the TCO; note in approvals that native services skip the new-vendor security review. Any NON-native tool you still recommend must explicitly justify why it beats the native option despite egress and a new vendor review. Mention in the summary that the plan is optimized for their ${preferCloud} environment.` : ""}
 - Pick ONE clear solution approach (don't hedge with "you could also...")
@@ -748,6 +749,20 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           }
         }
 
+        // On a refine, the model may report which profile fields the user's
+        // change actually altered (e.g. "budget is now $5k" → budget). Merge
+        // those into the echoed context so the report's badges reflect the
+        // revised scenario instead of contradicting the report body.
+        const ctxUpdate: Record<string, string> = {};
+        if (refineNote && solution && typeof solution.contextUpdate === "object" && solution.contextUpdate) {
+          const allowed = ["size", "stack", "budget", "timeline", "industry", "team", "seats", "techLevel", "compliance"] as const;
+          for (const k of allowed) {
+            const v = (solution.contextUpdate as Record<string, unknown>)[k];
+            if (typeof v === "string" && v.trim()) ctxUpdate[k] = v.trim().slice(0, 120);
+          }
+        }
+        if (solution && typeof solution === "object") delete solution.contextUpdate;
+
         // Format guard — whatever the model produced, the report leaves in the
         // exact shape the UI and PDF expect
         solution = normalizeSolution(solution);
@@ -761,7 +776,7 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           solution,
           problem: refinedProblem,       // the brief the report was built from
           originalProblem: problem,      // the user's own words, kept for reference
-          context: { size, stack, budget, timeline, industry, team, seats, techLevel, compliance, preferCloud },
+          context: { size, stack, budget, timeline, industry, team, seats, techLevel, compliance, preferCloud, ...ctxUpdate },
           // Echo the refine note so the report can show WHAT changed — the
           // structured badges above still reflect the original brief, so the
           // note is what reconciles them with the updated report body.
