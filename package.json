@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "eval": "node eval/replay.mjs --fixtures",
-    "eval:live": "node eval/replay.mjs --live"
+    "eval:live": "node eval/replay.mjs --live",
+    "analyze": "node eval/analyze-feedback.mjs --fixtures",
+    "analyze:live": "node eval/analyze-feedback.mjs --live"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",

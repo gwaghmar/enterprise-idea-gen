@@ -718,7 +718,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
     // Behavioral feedback for the learning loop — best-effort
     try {
       fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, detail, title: solution?.title ?? "" }) }).catch(() => {});
+        body: JSON.stringify({ kind, detail, title: solution?.title ?? "", problem }) }).catch(() => {});
     } catch { /* never block the action */ }
   }
 
@@ -745,7 +745,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
     try {
       await fetch("/api/feedback", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, comment, title: solution?.title ?? "" }),
+        body: JSON.stringify({ rating, comment, title: solution?.title ?? "", problem }),
       });
     } catch { /* feedback is best-effort */ }
   }
