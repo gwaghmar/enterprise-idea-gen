@@ -1,0 +1,22 @@
+{
+  "title": "Databricks Lakehouse for Real-time Omnicom Analytics",
+  "summary": "This solution recommends Databricks to replace Azure Synapse, with a path toward the potential AWS migration.",
+  "insight": "The biggest mistake is over-engineering for AI/ML when the real need is low-latency BI.",
+  "evaluated": [
+    { "name": "Databricks Enterprise", "verdict": "chosen", "reason": "Strong lakehouse for the stated real-time needs." },
+    { "name": "Snowflake Enterprise", "verdict": "rejected", "reason": "Excellent for BI but weaker for the AI/ML roadmap." },
+    { "name": "Microsoft Fabric", "verdict": "rejected", "reason": "Best only if staying 100% on Azure." },
+    { "name": "Google BigQuery", "verdict": "rejected", "reason": "Locks into Google Cloud." },
+    { "name": "AWS Redshift", "verdict": "rejected", "reason": "Locks into AWS during an undecided migration." }
+  ],
+  "tools": [
+    { "name": "Databricks Enterprise", "purpose": "Lakehouse platform", "category": "Analytics", "whyForYou": "Handles the real-time and AI/ML workloads on Azure with an AWS path." }
+  ],
+  "approvals": {
+    "permissions": [
+      { "name": "Databricks workspace admin", "owner": "IT Director", "why": "Needed to provision the workspace and manage users during setup." },
+      { "name": "Azure Data Factory managed identity", "owner": "IT Admin", "why": "Lets the pipeline connect to Dynamics F&O and Databricks without stored credentials." }
+    ]
+  },
+  "tco": { "monthlyRecurring": "$9,500/mo" }
+}
