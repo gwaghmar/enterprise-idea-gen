@@ -59,6 +59,7 @@ interface Solution {
   teamRequired: TeamRole[];
   kpis: Kpi[];
   adoptionPlan?: AdoptionStep[];
+  evaluated?: { name: string; verdict: string; reason: string }[];
   tco?: {
     lineItems: LineItem[];
     oneTimeSetup?: string;
@@ -107,6 +108,29 @@ function titleBlock(ws: ExcelJS.Worksheet, title: string, subtitle: string, span
   ws.getRow(2).height = 18;
 }
 
+// exceljs can't create native charts, but data-bar conditional formatting
+// renders real in-cell proportional bars natively in Excel/Sheets — so a
+// numeric column becomes a bar chart with no floating chart object (and no
+// empty whitespace around it).
+function dataBar(ws: ExcelJS.Worksheet, ref: string, argb: string) {
+  ws.addConditionalFormatting({
+    ref,
+    rules: [{ type: "dataBar", cfvo: [{ type: "min" }, { type: "max" }], color: { argb }, gradient: true } as any],
+  });
+}
+
+// Parse a phase's week span from its title for the timeline Gantt.
+// "Week 1-2" -> [1,2]; "Week 3" -> [3,3]; "Month 2+" -> ~[5,8]; else 2-wk block.
+function weekSpan(title: string, idx: number): [number, number] {
+  const range = title.match(/week\s*(\d+)\s*[-–—]\s*(\d+)/i);
+  if (range) return [parseInt(range[1], 10), parseInt(range[2], 10)];
+  const one = title.match(/week\s*(\d+)/i);
+  if (one) return [parseInt(one[1], 10), parseInt(one[1], 10)];
+  const mo = title.match(/month\s*(\d+)/i);
+  if (mo) { const s = (parseInt(mo[1], 10) - 1) * 4 + 1; return [s, s + 3]; }
+  return [idx * 2 + 1, idx * 2 + 2];
+}
+
 export async function generateExcel(solutionRaw: Solution | any, problem: string): Promise<Uint8Array> {
   const solution = solutionRaw as Solution;
   const wb = new ExcelJS.Workbook();
@@ -140,6 +164,28 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
   });
   r = metricStart + metrics.length + 1;
 
+  // COST BREAKDOWN — real in-cell bar chart via data bars.
+  const dashItems = solution.tco?.lineItems || [];
+  const numericItems = dashItems.map((li) => ({ item: li.item, type: li.type, n: money(li.cost) })).filter((x) => typeof x.n === "number");
+  if (numericItems.length) {
+    dash.getCell(r, 1).value = "COST BREAKDOWN";
+    dash.getCell(r, 1).font = { bold: true, size: 11, color: { argb: ACCENT } };
+    r += 1;
+    const barStart = r;
+    numericItems.forEach((x) => {
+      const row = dash.getRow(r);
+      row.getCell(1).value = x.item;
+      row.getCell(1).alignment = { wrapText: true };
+      row.getCell(2).value = x.n;
+      row.getCell(2).numFmt = '"$"#,##0';
+      row.getCell(3).value = x.type;
+      row.getCell(3).font = { color: { argb: x.type === "Recurring" ? AMBER : GREEN }, size: 9 };
+      r += 1;
+    });
+    dataBar(dash, `B${barStart}:B${r - 1}`, ACCENT);
+    r += 1;
+  }
+
   if (solution.costOfInaction) {
     const c = solution.costOfInaction;
     dash.getCell(r, 1).value = "COST OF INACTION";
@@ -159,6 +205,15 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
       dash.getCell(r, 2).value = c.paybackPeriod;
       dash.getCell(r, 2).font = { bold: true, color: { argb: GREEN } };
       r += 1;
+    }
+    // Inaction vs plan — two proportional bars make the gap visceral.
+    const inactionN = money(c.annualCost);
+    const planN = money(solution.tco?.firstYearTotal || solution.estimatedCost);
+    if (typeof inactionN === "number" && typeof planN === "number") {
+      const s = r;
+      const a = dash.getRow(r); a.getCell(1).value = "Cost of inaction (annual)"; a.getCell(2).value = inactionN; a.getCell(2).numFmt = '"$"#,##0'; r += 1;
+      const b = dash.getRow(r); b.getCell(1).value = "This plan (first-year)"; b.getCell(2).value = planN; b.getCell(2).numFmt = '"$"#,##0'; r += 1;
+      dataBar(dash, `B${s}:B${r - 1}`, RED);
     }
     r += 1;
   }
@@ -182,6 +237,37 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
       row.getCell(4).value = k.timeframe || "—";
       row.eachCell((cell) => (cell.border = { bottom: { style: "hair", color: { argb: GREY } } }));
       r += 1;
+    });
+  }
+
+  // ---------- Timeline (Gantt) ----------
+  // A colored-cell grid: each phase's row fills the weeks it spans. Own sheet
+  // so the narrow week columns don't fight the wide dashboard columns.
+  if (solution.phases?.length) {
+    const spans = solution.phases.map((p, i) => weekSpan(p.title, i));
+    const maxWk = Math.min(20, Math.max(4, ...spans.map((s) => s[1])));
+    const tl = wb.addWorksheet("Timeline", { views: [{ showGridLines: false, state: "frozen", xSplit: 1, ySplit: 4 }] });
+    titleBlock(tl, "Implementation Timeline", "Each shaded block is one week of the rollout", maxWk + 1);
+    tl.getColumn(1).width = 30;
+    for (let w = 1; w <= maxWk; w++) tl.getColumn(w + 1).width = 4;
+    const hdr = tl.getRow(4);
+    hdr.getCell(1).value = "Phase";
+    for (let w = 1; w <= maxWk; w++) { hdr.getCell(w + 1).value = `W${w}`; }
+    styleHeaderRow(hdr);
+    let tr = 5;
+    solution.phases.forEach((p, i) => {
+      const row = tl.getRow(tr);
+      row.getCell(1).value = p.title;
+      row.getCell(1).font = { bold: true, color: { argb: NAVY }, size: 10 };
+      row.getCell(1).alignment = { wrapText: true, vertical: "middle" };
+      const [s, e] = spans[i];
+      for (let w = Math.max(1, s); w <= Math.min(e, maxWk); w++) {
+        const c = row.getCell(w + 1);
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: i % 2 ? ACCENT : NAVY } };
+        c.border = { top: { style: "thin", color: { argb: WHITE } }, bottom: { style: "thin", color: { argb: WHITE } } };
+      }
+      row.height = 22;
+      tr += 1;
     });
   }
 
@@ -299,6 +385,7 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
     }
     costRow += 1;
   });
+  if (costRow > 5) dataBar(costs, `C5:C${costRow - 1}`, ACCENT);
   const totalRow = costRow + 1;
   costs.getCell(totalRow, 1).value = "TOTAL (first year)";
   costs.getCell(totalRow, 1).font = { bold: true, color: { argb: NAVY } };
@@ -364,6 +451,35 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
       row.getCell(4).value = role.phases;
       row.getCell(5).value = role.staffing;
       teamRow += 1;
+    });
+  }
+
+  // ---------- Comparison (scenario-adaptive) ----------
+  // Only for questions that were actually a bake-off — a field of candidates
+  // evaluated against each other. A simple single-tool request skips this tab.
+  const evaluated = solution.evaluated || [];
+  if (evaluated.length >= 3) {
+    const cmp = wb.addWorksheet("Comparison", { views: [{ showGridLines: false, state: "frozen", ySplit: 4 }] });
+    titleBlock(cmp, "Candidates Evaluated", "Why the winner won — and why each alternative was ruled out", 3);
+    autosize(cmp, [30, 14, 60]);
+    const cHdr = cmp.getRow(4);
+    ["Candidate", "Verdict", "Reasoning"].forEach((h, i) => (cHdr.getCell(i + 1).value = h));
+    styleHeaderRow(cHdr);
+    let cr = 5;
+    // Chosen first, then rejected — the recommendation leads.
+    const ordered = [...evaluated].sort((a, b) => (a.verdict === "chosen" ? -1 : b.verdict === "chosen" ? 1 : 0));
+    ordered.forEach((e) => {
+      const chosen = String(e.verdict).toLowerCase() === "chosen";
+      const row = cmp.getRow(cr);
+      row.getCell(1).value = e.name;
+      row.getCell(1).font = { bold: true, color: { argb: NAVY } };
+      row.getCell(2).value = chosen ? "CHOSEN" : "Rejected";
+      row.getCell(2).font = { bold: chosen, color: { argb: chosen ? GREEN : GREY } };
+      row.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: chosen ? "FFE7F6EF" : LIGHT } };
+      row.getCell(3).value = e.reason;
+      row.getCell(3).alignment = { wrapText: true, vertical: "top" };
+      row.eachCell((c) => (c.border = { bottom: { style: "hair", color: { argb: GREY } } }));
+      cr += 1;
     });
   }
 
