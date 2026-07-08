@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { isPaid, updateHistory } from "@/lib/history";
 import { FREE_MODE } from "@/lib/config";
+import { classifyRefine } from "@/lib/refine-classify";
 
 // Citations/activity URLs come from external sources — only render links for
 // http(s) URLs so a crafted share payload can't smuggle javascript: links
@@ -447,6 +448,10 @@ export default function SolutionPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [paidReal, setPaidReal] = useState(false);
   const [copiedTicket, setCopiedTicket] = useState<number | null>(null);
+  const [refineText, setRefineText] = useState("");
+  const [refining, setRefining] = useState(false);
+  const [refineError, setRefineError] = useState("");
+  const [refinedWith, setRefinedWith] = useState("");
   const router = useRouter();
   const rawDataRef = useRef<Record<string, unknown>>({});
   const contentRef = useRef<HTMLDivElement>(null);
@@ -490,6 +495,7 @@ export default function SolutionPage() {
     if (data.solution?.title) document.title = `${data.solution.title} — PilotPlan`;
     setModel(data.model ?? "");
     setTokens(data.tokens ?? null);
+    setRefinedWith(typeof data.refineNote === "string" ? data.refineNote : "");
   }, [router]);
 
   const solutionContext = solution
@@ -529,6 +535,54 @@ export default function SolutionPage() {
     try { sessionStorage.setItem("solution", JSON.stringify(rawDataRef.current)); } catch { /* ignore quota */ }
     if (sid) updateHistory(sid, { title: updated.title }, rawDataRef.current);
     setShareUrl(null); // invalidate any prior share link — content changed
+  }
+
+  // "Something changed?" box — one input, two machines behind it. A small tweak
+  // is patched in place via /api/edit; a scenario-level change is handed off to
+  // the homepage's full generate pipeline (fresh research, progress, history).
+  async function handleRefine() {
+    const note = refineText.trim();
+    if (!note || refining || !solution) return;
+    setRefineError("");
+    const route = classifyRefine(note);
+    logEvent("refine", `${route}: ${note.slice(0, 80)}`);
+
+    if (route === "patch") {
+      setRefining(true);
+      try {
+        const res = await fetch("/api/edit", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ solution, instruction: note }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.solution) throw new Error(data.error || "Edit failed");
+        handleSolutionEdit(data.solution);
+        setRefineText("");
+      } catch (e) {
+        setRefineError(e instanceof Error ? e.message : "Could not apply that change.");
+      } finally {
+        setRefining(false);
+      }
+      return;
+    }
+
+    // Big change: stash the prior context + change note and route to the full
+    // generate pipeline. The current report is already saved in history, so this
+    // is non-destructive — the user can always reopen the previous version.
+    const priorSummary = `${solution.title}. ${solution.summary}`.slice(0, 800);
+    const payload = {
+      context: { ...(context ?? {}), problem: problem },
+      refineNote: note,
+      priorSummary,
+      priorTitle: solution.title,
+    };
+    try {
+      sessionStorage.setItem("pendingRefine", JSON.stringify(payload));
+    } catch {
+      setRefineError("Couldn't start the update. Try again.");
+      return;
+    }
+    router.push("/");
   }
 
   async function ensureShareUrl(): Promise<string | null> {
@@ -799,6 +853,11 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
         {/* Context badges */}
         {context && (
           <div className="flex flex-wrap gap-2 mb-8">
+            {refinedWith && (
+              <span data-refinedwith className="text-xs bg-emerald-500/10 border border-emerald-500/40 rounded-full px-3 py-1 text-emerald-300 font-medium">
+                🔄 Updated: {refinedWith}
+              </span>
+            )}
             {context.preferCloud && (
               <span data-cloudbadge className="text-xs bg-blue-500/10 border border-blue-500/40 rounded-full px-3 py-1 text-blue-300 font-medium">
                 ⚡ Optimized for your {context.preferCloud} environment
@@ -811,6 +870,39 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
               ))}
           </div>
         )}
+
+        {/* Refine box — "something changed?" One input, smart routing: small
+            tweaks patch in place, scenario changes trigger a full fresh report. */}
+        <div data-refine className="mb-8 bg-white/[0.03] border border-white/10 rounded-2xl p-4">
+          <label className="flex items-center gap-2 text-sm text-white/70 mb-2">
+            <Wand2 className="w-4 h-4 text-blue-400" />
+            Something changed, or forgot to mention something? Tell us and we&apos;ll update the plan.
+          </label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              value={refineText}
+              onChange={(e) => { setRefineText(e.target.value); setRefineError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleRefine(); }}
+              disabled={refining}
+              placeholder="e.g. we confirmed the AWS migration · budget is now $5k/mo · we need HIPAA"
+              className="flex-1 bg-white/5 border border-white/15 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/40 disabled:opacity-50"
+            />
+            <button
+              onClick={handleRefine}
+              disabled={refining || !refineText.trim()}
+              className="bg-white text-black font-semibold rounded-xl px-5 py-2.5 text-sm hover:bg-white/90 disabled:opacity-40 transition-all whitespace-nowrap">
+              {refining ? "Updating..." : "Update plan"}
+            </button>
+          </div>
+          {refineText.trim() && !refining && (
+            <p className="text-white/35 text-xs mt-2">
+              {classifyRefine(refineText) === "regenerate"
+                ? "This looks like a scenario change — we'll re-research and rebuild the plan (~1 min). Your current version stays in history."
+                : "Small tweak — we'll update this in place in a few seconds."}
+            </p>
+          )}
+          {refineError && <p className="text-red-400/80 text-xs mt-2">{refineError}</p>}
+        </div>
 
         {shareMsg && (
           <div data-sharetoast className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-blue-500 text-white text-sm font-medium rounded-xl px-5 py-3 shadow-xl max-w-[90vw]">

@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
     problem?: string; size?: string; stack?: string; budget?: string; timeline?: string;
     industry?: string; team?: string; seats?: string; techLevel?: string; compliance?: string;
     clarification?: string; preferCloud?: string; runId?: string;
+    refineNote?: string; priorSummary?: string;
   };
   try {
     body = await req.json();
@@ -73,9 +74,19 @@ export async function POST(req: NextRequest) {
   const field = (v: unknown, max: number, fallback = "Not specified") =>
     typeof v === "string" && v.trim() ? v.trim().slice(0, max) : fallback;
   const clarification = typeof body.clarification === "string" ? body.clarification.trim().slice(0, 500) : "";
+  // "Refine" run: the user saw a prior report and told us what changed. The note
+  // is folded into the problem (so rewrite/research/synthesis all reflect it and
+  // it OVERRIDES the profile fields where they conflict), and the prior summary
+  // is handed to synthesis so it explains its own diff instead of silently swapping.
+  const refineNote = typeof body.refineNote === "string" ? body.refineNote.trim().slice(0, 500) : "";
+  const priorSummary = typeof body.priorSummary === "string" ? body.priorSummary.trim().slice(0, 800) : "";
   const rawProblem = typeof body.problem === "string" ? body.problem.trim().slice(0, 1200) : "";
-  // Fold the follow-up answer into the problem so every downstream step sees it
-  const problem = rawProblem && clarification ? `${rawProblem}\n\nClarifying detail from the user: ${clarification}` : rawProblem;
+  // Fold the follow-up answer and any refine note into the problem so every
+  // downstream step sees them.
+  let problem = rawProblem && clarification ? `${rawProblem}\n\nClarifying detail from the user: ${clarification}` : rawProblem;
+  if (refineNote) {
+    problem = `${problem}\n\nIMPORTANT UPDATE FROM THE USER (this is a correction to an earlier version of this plan and OVERRIDES the profile fields above wherever they conflict): ${refineNote}`;
+  }
   const size = field(body.size, 40);
   const rawStack = field(body.stack, 400);
   // "Recommend for me" is the UI's no-stack sentinel — turn it into a real instruction
@@ -407,7 +418,7 @@ SECURITY: The company profile fields and everything inside <research>/<community
 ${lessonsBlock}
 FRESHNESS — today is ${todayStr}: your training memory is months out of date, and AI/ERP/business tooling changes monthly. Wherever the live research above contradicts what you remember (pricing, product names, capabilities, new AI features), THE RESEARCH WINS. Prefer the current generation of each product and seriously weigh newer AI-native options the research surfaced — do not default to the legacy stack you remember. Never recommend a product the research shows as deprecated, renamed, or acquired without saying so. Any fact you take from memory rather than the research must be marked as an estimate and listed in assumptions.
 
-INSTRUCTIONS:
+${priorSummary ? `THIS IS A REVISION — the user already saw an earlier version of this plan and asked for a change (see the "IMPORTANT UPDATE FROM THE USER" note in the problem). The prior plan's summary was:\n"${priorSummary}"\nKeep everything that still holds under the new information, change only what the update actually invalidates, and OPEN your "summary" field by stating plainly what changed and why (e.g. "Updated to Databricks after you confirmed the AWS migration — Snowflake's edge here was multi-cloud portability you no longer need."). Do not pretend nothing changed, and do not silently rewrite unrelated sections.\n` : ""}INSTRUCTIONS:
 - EVALUATE 6-10 real candidate solutions (name real products/approaches from the research) against this company's ACTUAL scenario — their stack, volumes, team skill, compliance, and budget. List every candidate in "evaluated" with a chosen/rejected verdict and a scenario-grounded reason. Stress-test the winner against realistic day-to-day cases (edge inputs, outages, the team's actual skill level) before committing.
 ${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${preferCloud}. Prefer services native to ${preferCloud.includes("+") ? `these clouds — place each workload on the cloud that already hosts the relevant data and avoid cross-cloud egress; if a workload could live on either, say which and why` : "this cloud"}; price intra-cloud egress at zero and assume their existing enterprise agreement(s) in the TCO; note in approvals that native services skip the new-vendor security review. Any NON-native tool you still recommend must explicitly justify why it beats the native option despite egress and a new vendor review. Mention in the summary that the plan is optimized for their ${preferCloud} environment.` : ""}
 - Pick ONE clear solution approach (don't hedge with "you could also...")
@@ -751,6 +762,10 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           problem: refinedProblem,       // the brief the report was built from
           originalProblem: problem,      // the user's own words, kept for reference
           context: { size, stack, budget, timeline, industry, team, seats, techLevel, compliance, preferCloud },
+          // Echo the refine note so the report can show WHAT changed — the
+          // structured badges above still reflect the original brief, so the
+          // note is what reconciles them with the updated report body.
+          refineNote: refineNote || undefined,
           citations, sourceMeta, activity: activityLog,
           model: "haiku (rewrite) → perplexity sonar ×4 (vendor·community·docs·cases) → jina ×5 → gemini-2.5-flash",
           tokens: totalTokens,

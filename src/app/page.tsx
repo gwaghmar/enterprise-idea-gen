@@ -451,6 +451,15 @@ function ProgressRing({ progress, elapsed }: { progress: number; elapsed: number
   );
 }
 
+// A refine handoff from the /solution page: regenerate the report with the
+// prior context + a free-form change note, reusing the full generate pipeline.
+type RefineRun = {
+  context: Record<string, unknown> & { problem?: string };
+  refineNote: string;
+  priorSummary: string;
+  priorTitle: string;
+};
+
 export default function Home() {
   const [problem, setProblem] = useState("");
   const [size, setSize] = useState("");
@@ -534,6 +543,22 @@ export default function Home() {
   }, [loading]);
 
   useEffect(() => { setHasHistory(listHistory().length > 0); }, []);
+
+  // Refine handoff: the /solution page stashed a "big change" request and routed
+  // here. Pick it up once, show the original problem on the loading screen, and
+  // run the full generate pipeline with the diff-aware refine payload.
+  useEffect(() => {
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem("pendingRefine"); } catch { /* unavailable */ }
+    if (!raw) return;
+    try { sessionStorage.removeItem("pendingRefine"); } catch { /* ignore */ }
+    let payload: RefineRun;
+    try { payload = JSON.parse(raw); } catch { return; }
+    if (!payload?.context || !payload.refineNote) return;
+    if (typeof payload.context.problem === "string") setProblem(payload.context.problem);
+    runGeneration(false, payload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Autofill ONLY tools the user literally names in the problem text —
   // exact catalog matches, no inference ("CRM" never becomes "Salesforce").
@@ -685,7 +710,7 @@ export default function Home() {
 
   // resume=true keeps the already-streamed preview on screen so a retry after
   // a dropped connection feels like continuing, not starting over
-  async function runGeneration(resume: boolean) {
+  async function runGeneration(resume: boolean, refine?: RefineRun) {
     setClarify(null);
     // Same runId across resumes lets the server skip completed stages
     if (!resume || !runIdRef.current) {
@@ -713,21 +738,32 @@ export default function Home() {
       }
     } catch { /* unavailable */ }
 
-    const context = {
-      problem: problem.trim(),
-      size,
-      stack: resolvedStack,
-      budget,
-      timeline,
-      industry: industry.trim(),
-      team,
-      seats: seats.trim(),
-      techLevel,
-      compliance: compliance.join(", ") || "Not specified",
-      clarification: clarificationText().slice(0, 500),
-      preferCloud: preferCloud && detectedCloud ? detectedCloud : "",
-      runId: runIdRef.current,
-    };
+    // A refine run carries the prior report's own context verbatim (so we don't
+    // depend on hydrating every form field back into state first), plus the
+    // change note and prior summary that drive the diff-aware regeneration.
+    const context = refine
+      ? {
+          ...refine.context,
+          clarification: "",
+          refineNote: refine.refineNote,
+          priorSummary: refine.priorSummary,
+          runId: runIdRef.current,
+        }
+      : {
+          problem: problem.trim(),
+          size,
+          stack: resolvedStack,
+          budget,
+          timeline,
+          industry: industry.trim(),
+          team,
+          seats: seats.trim(),
+          techLevel,
+          compliance: compliance.join(", ") || "Not specified",
+          clarification: clarificationText().slice(0, 500),
+          preferCloud: preferCloud && detectedCloud ? detectedCloud : "",
+          runId: runIdRef.current,
+        };
 
     try {
       const res = await fetch("/api/generate", {
