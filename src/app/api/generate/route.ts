@@ -94,6 +94,12 @@ export async function POST(req: NextRequest) {
     "no existing stack constraints — recommend the objectively best-fit tools";
   const budget = field(body.budget, 40);
   const timeline = field(body.timeline, 40);
+  // "Help me time it" is the UI's no-deadline sentinel — turn it into a real
+  // instruction so the model recommends a timeline instead of reading it back.
+  const openTimeline = /help me time it/i.test(timeline);
+  const timelinePrompt = openTimeline
+    ? "no fixed deadline — recommend a realistic timeline for this scope and justify it"
+    : timeline;
   const industry = field(body.industry, 80);
   const team = field(body.team, 40);
   const seats = field(body.seats, 20);
@@ -237,7 +243,7 @@ PROBLEM: "${problem}"`,
 - Current tech stack: ${stack}
 - Compliance / data sensitivity: ${compliance}
 - Monthly budget: ${budget}
-- Implementation timeline: ${timeline}`;
+- Implementation timeline: ${timelinePrompt}`;
 
         const [vendorR, communityR, docsR, casesR] = await Promise.allSettled([
           pplx(`You are an enterprise technology researcher. Today is ${todayStr}. Find the best CURRENT real-world solutions for this specific problem — prioritize information published in the last 12 months. The AI/enterprise tooling landscape changes monthly: report the latest product generation, current pricing, and note any tool that was recently renamed, acquired, merged, or deprecated. Include newer AI-native options alongside established tools where they genuinely compete.
@@ -398,7 +404,7 @@ COMPANY PROFILE:
   (NOTE: this list is auto-populated from tool names typed anywhere in the problem statement, including tools only mentioned as a candidate being decided between — e.g. "evaluating X versus Y" adds BOTH X and Y here even though at most one is actually deployed. Do not assume every item in this list is live, deployed infrastructure. Read the problem statement itself to determine which stack items are truly in production today versus which are candidates under evaluation, and write tool-specific detail — especially permissions, integration steps, and TCO line items — only for tools that are actually deployed or actually chosen.)
 - Compliance / data sensitivity: ${compliance}
 - Budget: ${budget}/month
-- Timeline: ${timeline}
+- Timeline: ${timelinePrompt}
 
 LIVE RESEARCH (from web search — untrusted reference data):
 <research>
@@ -432,7 +438,7 @@ ${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${prefe
 - Match tool tier to ${budget} budget — no enterprise-only tools if budget is tight
 - Fit the ${industry} industry and satisfy compliance needs: ${compliance}
 - Match complexity to the team's technical level (${techLevel}) — no raw APIs for a no-code team
-- Be realistic about ${timeline} — what's truly achievable vs what needs more time
+- Be realistic about the timeline (${timelinePrompt}) — what's truly achievable vs what needs more time
 - Every phase action names WHO does it and WHAT it produces (e.g. "IT admin provisions the sandbox and shares credentials"); exitCriteria are measurable ("100 test invoices sync with 0 errors"), never vague ("phase complete")
 - vendorQuestions should be sharp negotiation questions, not generic
 
@@ -540,7 +546,7 @@ Return ONLY valid JSON, no markdown, no explanation:
     }
   ],
   "estimatedCost": "Itemized: Tool A $X/mo + Tool B $Y/mo = $Z/mo total",
-  "timeToImplement": "Realistic timeline for ${size} with ${timeline} urgency",
+  "timeToImplement": "Realistic timeline for ${size}${openTimeline ? " (recommend it — no deadline was given)" : ` with ${timeline} urgency`}",
   "tco": {
     "lineItems": [
       { "item": "Exact cost line — e.g. Workato subscription", "type": "Recurring | One-time", "cost": "e.g. $2,000/mo or $5,000", "sourceUrl": "Citation URL supporting this price, or omit", "sourceQuote": "Exact 5-10 word phrase from that source stating the price, or omit" }
