@@ -372,8 +372,10 @@ Report, concisely:
         await saveCkpt({ stage: "research", refinedProblem, searchContent, communityContent, docsContent, casesContent, sourceContent, citations, sourceMeta });
         } // end !ckpt (research + reading)
 
-        // Lessons distilled from real user feedback — the learning loop
-        const lessons = await loadLessons().catch(() => [] as string[]);
+        // Lessons distilled from real user feedback — the learning loop.
+        // Scoped by this report's size + industry so an SMB lesson never lands
+        // on an enterprise plan (and vice versa); global lessons always apply.
+        const lessons = await loadLessons({ size, industry }).catch(() => [] as string[]);
         const lessonsBlock = lessons.length
           ? `\nLESSONS FROM USER FEEDBACK on past reports (advisory patterns — apply where relevant, but the live research and the rules below always win):\n${lessons.map((l) => `- ${l}`).join("\n")}\n`
           : "";
