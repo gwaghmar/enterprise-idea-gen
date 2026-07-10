@@ -435,6 +435,7 @@ ${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${prefe
 - Lead with the insight most companies miss about this problem
 - Choose tools that ACTUALLY integrate with ${stack} — verify from the research above
 - If the problem describes a head-to-head decision between two or more specific tools (e.g. "X vs Y", "deciding between X and Y", "replace X with Y"), do NOT treat the losing candidate as already-deployed infrastructure anywhere in the report — no permissions, no federation/integration steps, no TCO line item for it unless it is explicitly kept as a supporting tool. Every permission/access item you list must state in plain language WHY it's needed (who uses it and for what), not just the raw privilege name
+- dataFlow should reflect ONLY real, grounded connections you're confident about (e.g. an ETL tool feeding a warehouse, a warehouse feeding a BI tool, an ERP being synced into a new platform) — 3-8 entries is typical; omit the field entirely rather than invent a connection you're not sure of. "from"/"to" may reference an existing-stack system that isn't in tools[] (e.g. the ERP being fed data) as long as its name is exact and recognizable
 - Match tool tier to ${budget} budget — no enterprise-only tools if budget is tight
 - Fit the ${industry} industry and satisfy compliance needs: ${compliance}
 - Match complexity to the team's technical level (${techLevel}) — no raw APIs for a no-code team
@@ -486,8 +487,14 @@ Return ONLY valid JSON, no markdown, no explanation:
         "Specific question about native ${stack} integration",
         "Question about pricing at ${size} scale",
         "Question about implementation support or SLA"
-      ]
+      ],
+      "environment": "Where this actually runs — one of: Azure | AWS | Google Cloud | On-Prem | Multi-cloud | SaaS (vendor-hosted, no specific cloud) — infer from the tool and the stated stack, don't guess wildly",
+      "status": "existing (already in production per the stack/problem), new (being added by this plan), or replaced (being retired/swapped out by this plan) — 'new' unless the problem/stack clearly says otherwise",
+      "dataSensitivity": "Only if this system will hold genuinely sensitive data given the stated compliance/industry — a short tag like 'PHI', 'PII', 'Financial', 'Cardholder data' — omit entirely if nothing sensitive lives here"
     }
+  ],
+  "dataFlow": [
+    { "from": "Exact tool name (must match a name in tools[] or an existing stack item)", "to": "Exact tool name it sends data to", "via": "How — one of: API | ETL/batch | Event stream | Direct DB connection | Webhook | File transfer", "note": "Optional short label, e.g. 'nightly sync' or 'real-time'" }
   ],
   "phases": [
     {

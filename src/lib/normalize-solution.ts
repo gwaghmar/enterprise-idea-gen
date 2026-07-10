@@ -45,6 +45,21 @@ export function normalizeSolution(raw: any): any {
     const reason = str(t?.lockIn?.reason, 200);
     return level && reason ? { level, reason } : undefined;
   };
+  const ENVIRONMENTS = ["azure", "aws", "google cloud", "gcp", "on-prem", "on prem", "multi-cloud", "multi cloud", "saas"];
+  const environmentOf = (v: unknown): string | undefined => {
+    const s2 = str(v, 30).toLowerCase();
+    if (/azure/.test(s2)) return "Azure";
+    if (/aws|amazon/.test(s2)) return "AWS";
+    if (/google|gcp/.test(s2)) return "Google Cloud";
+    if (/on[\s-]?prem/.test(s2)) return "On-Prem";
+    if (/multi/.test(s2)) return "Multi-cloud";
+    if (/saas/.test(s2)) return "SaaS";
+    return ENVIRONMENTS.some((e) => s2.includes(e)) ? s2 : undefined;
+  };
+  const statusOf = (v: unknown): "existing" | "new" | "replaced" => {
+    const s2 = str(v, 20).toLowerCase();
+    return s2.includes("replac") ? "replaced" : s2.includes("exist") ? "existing" : "new";
+  };
   const tools = arr(s.tools).map((t: any) => ({
     name: str(t?.name, 80) || "Unnamed tool",
     purpose: str(t?.purpose, 300),
@@ -53,7 +68,17 @@ export function normalizeSolution(raw: any): any {
     sourceUrl: httpUrl(t?.sourceUrl),
     vendorQuestions: strArr(t?.vendorQuestions, 5, 200),
     lockIn: lockInOf(t),
+    environment: environmentOf(t?.environment),
+    status: statusOf(t?.status),
+    dataSensitivity: str(t?.dataSensitivity, 30) || undefined,
   })).filter((t: any) => t.name !== "Unnamed tool" || t.purpose).slice(0, 8);
+
+  const dataFlow = arr(s.dataFlow).map((d: any) => ({
+    from: str(d?.from, 80),
+    to: str(d?.to, 80),
+    via: str(d?.via, 30) || "connects to",
+    note: str(d?.note, 60) || undefined,
+  })).filter((d: any) => d.from && d.to && d.from.toLowerCase() !== d.to.toLowerCase()).slice(0, 10);
 
   const phases = arr(s.phases).map((p: any, i: number) => ({
     title: str(p?.title, 90) || `Phase ${i + 1}`,
@@ -96,6 +121,7 @@ export function normalizeSolution(raw: any): any {
     estimatedCost: shortValue(s.estimatedCost, 40),
     timeToImplement: shortValue(s.timeToImplement, 60),
     tools,
+    dataFlow,
     phases,
     evaluated: arr(s.evaluated).map((c: any) => ({
       name: str(c?.name, 80),

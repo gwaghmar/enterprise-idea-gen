@@ -12,6 +12,8 @@ import { isPaid, updateHistory } from "@/lib/history";
 import { FREE_MODE } from "@/lib/config";
 import { classifyRefine } from "@/lib/refine-classify";
 import JourneyMap from "./journey-map";
+import ArchitectureMap from "./architecture-map";
+import { hasArchitectureData } from "@/lib/generate-architecture";
 
 // Citations/activity URLs come from external sources — only render links for
 // http(s) URLs so a crafted share payload can't smuggle javascript: links
@@ -160,7 +162,9 @@ interface LockIn { level: string; reason: string; }
 interface Tool {
   name: string; purpose: string; category: string;
   whyForYou: string; vendorQuestions?: string[]; sourceUrl?: string; lockIn?: LockIn;
+  environment?: string; status?: "existing" | "new" | "replaced"; dataSensitivity?: string;
 }
+interface DataFlowLink { from: string; to: string; via: string; note?: string; }
 interface FlowNode { id: string; label: string; type: string; }
 interface FlowEdge { from: string; to: string; label?: string; }
 interface Phase { title: string; objective?: string; actions: string[]; exitCriteria?: string[]; nodes?: FlowNode[]; edges?: FlowEdge[]; }
@@ -185,6 +189,7 @@ interface Solution {
   rolloutPlaybook?: RolloutPlaybook; approvals?: Approvals; vendorOutreach?: VendorOutreach;
   tco?: Tco; kpis?: Kpi[]; adoptionPlan?: AdoptionStep[]; alternative?: Alternative;
   assumptions?: string[]; showHoursRoi?: boolean; evaluated?: Evaluated[]; teamRequired?: TeamRole[];
+  dataFlow?: DataFlowLink[];
   costOfInaction?: { annualCost: string; basis: string; paybackPeriod?: string };
 }
 interface Context {
@@ -1114,11 +1119,21 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
           </div>
         )}
 
-        {/* End-to-end journey map — the whole solution in one Mermaid diagram */}
+        {/* End-to-end journey map — the whole solution in one picture */}
         {solution.phases && solution.phases.length > 0 && (
           <div data-journey className="mb-12">
-            <h2 className="text-xl font-semibold mb-1">The Whole Journey — One Picture</h2>
+            <h2 className="text-xl font-semibold mb-1">Rollout Timeline</h2>
             <JourneyMap solution={solution} problem={problem} context={context ?? undefined} />
+          </div>
+        )}
+
+        {/* System Architecture — how the systems actually connect. Only shows
+            when the synthesis produced environment/dataFlow data; older
+            reports generated before this schema addition simply won't have it. */}
+        {hasArchitectureData(solution) && (
+          <div data-architecture className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">System Architecture</h2>
+            <ArchitectureMap solution={solution} />
           </div>
         )}
 
