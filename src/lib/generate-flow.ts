@@ -148,3 +148,29 @@ export function buildJourneyFlow(solution: any, problem: string, context?: { sta
 
   return { nodes, edges, groups };
 }
+
+// Generic {nodes,edges,groups} -> Mermaid flowchart-LR text. Used for
+// diagrams (e.g. System Architecture) that don't have a hand-authored
+// Mermaid export like the journey map's generate-mermaid.ts does — this
+// keeps the "copy as portable code" bonus without duplicating that file's
+// bespoke per-section logic.
+function mLbl(s: string): string {
+  return s.replace(/["`]/g, "'").replace(/[[\]{}<>|#;]/g, " ").replace(/\n/g, "<br/>").replace(/\s+/g, " ").trim();
+}
+export function flowToMermaid(nodes: FNode[], edges: FEdge[], groups: FGroup[]): string {
+  const L: string[] = ["flowchart LR"];
+  groups.forEach((g) => {
+    const gNodes = nodes.filter((n) => n.group === g.id);
+    if (!gNodes.length) return;
+    L.push(`  subgraph ${g.id}["${mLbl(g.label)}"]`);
+    gNodes.forEach((n) => L.push(`    ${n.id}["${mLbl(n.label)}"]`));
+    L.push("  end");
+  });
+  const loose = nodes.filter((n) => !n.group);
+  loose.forEach((n) => L.push(`  ${n.id}["${mLbl(n.label)}"]`));
+  edges.forEach((e) => {
+    const arrow = e.dashed ? "-.->" : "-->";
+    L.push(e.label ? `  ${e.from} ${arrow}|${mLbl(e.label)}| ${e.to}` : `  ${e.from} ${arrow} ${e.to}`);
+  });
+  return L.join("\n");
+}
