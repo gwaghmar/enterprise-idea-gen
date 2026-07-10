@@ -62,7 +62,7 @@ const BUDGETS_BY_SIZE: Record<string, string[]> = {
   Enterprise: ["< $10k/mo", "$10–50k/mo", "$50k+/mo", "Help me size it"],
 };
 const DEFAULT_BUDGETS = BUDGETS_BY_SIZE.Startup;
-const TIMELINES = ["ASAP", "1–3 months", "3–6 months"];
+const TIMELINES = ["ASAP", "1–3 months", "3–6 months", "Help me time it"];
 const TEAMS = ["Executive / Strategy", "Finance", "Operations", "Marketing", "Sales", "IT / Eng", "HR", "Product", "Legal"];
 const TECH_LEVELS = ["No-code only", "Some developers", "Full eng team"];
 const COMPLIANCE = ["GDPR", "HIPAA", "SOC 2", "PCI-DSS", "ISO 27001", "None / Not sure"];
