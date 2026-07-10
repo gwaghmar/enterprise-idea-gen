@@ -1,0 +1,16 @@
+{
+  "title": "Automated Client Onboarding for a Small Accounting Firm",
+  "summary": "A no-code intake and reminder workflow that fits a 20-person firm and a sub-$10k/mo budget.",
+  "insight": "The win here is eliminating manual chase emails, not building a platform.",
+  "evaluated": [
+    { "name": "Content Snare", "verdict": "chosen", "reason": "Purpose-built document collection with automatic reminders, no-code." },
+    { "name": "Custom build on internal tooling", "verdict": "rejected", "reason": "No engineering team; overkill for the volume." }
+  ],
+  "tools": [
+    { "name": "Content Snare", "purpose": "Client document intake and reminders", "category": "Automation", "whyForYou": "No-code, priced for small firms, handles the chase-email problem directly." }
+  ],
+  "teamRequired": [
+    { "role": "Operations Lead", "skills": ["Workflow setup"], "commitment": "~10 hrs setup", "phases": "Phase 1", "staffing": "internal" }
+  ],
+  "tco": { "monthlyRecurring": "$1,200/mo" }
+}

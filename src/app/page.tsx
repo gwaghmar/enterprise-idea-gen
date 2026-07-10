@@ -451,6 +451,15 @@ function ProgressRing({ progress, elapsed }: { progress: number; elapsed: number
   );
 }
 
+// A refine handoff from the /solution page: regenerate the report with the
+// prior context + a free-form change note, reusing the full generate pipeline.
+type RefineRun = {
+  context: Record<string, unknown> & { problem?: string };
+  refineNote: string;
+  priorSummary: string;
+  priorTitle: string;
+};
+
 export default function Home() {
   const [problem, setProblem] = useState("");
   const [size, setSize] = useState("");
@@ -489,7 +498,7 @@ export default function Home() {
   const [errorQuip, setErrorQuip] = useState("");
   const [resumable, setResumable] = useState(false);
   const [clarify, setClarify] = useState<{ question: string; options: string[] } | null>(null);
-  const [clarifyChoice, setClarifyChoice] = useState("");
+  const [clarifyChoice, setClarifyChoice] = useState<string[]>([]);
   const [clarifyExtra, setClarifyExtra] = useState("");
   const [clarifying, setClarifying] = useState(false);
   const [autoDetected, setAutoDetected] = useState<string[]>([]);
@@ -534,6 +543,22 @@ export default function Home() {
   }, [loading]);
 
   useEffect(() => { setHasHistory(listHistory().length > 0); }, []);
+
+  // Refine handoff: the /solution page stashed a "big change" request and routed
+  // here. Pick it up once, show the original problem on the loading screen, and
+  // run the full generate pipeline with the diff-aware refine payload.
+  useEffect(() => {
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem("pendingRefine"); } catch { /* unavailable */ }
+    if (!raw) return;
+    try { sessionStorage.removeItem("pendingRefine"); } catch { /* ignore */ }
+    let payload: RefineRun;
+    try { payload = JSON.parse(raw); } catch { return; }
+    if (!payload?.context || !payload.refineNote) return;
+    if (typeof payload.context.problem === "string") setProblem(payload.context.problem);
+    runGeneration(false, payload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Autofill ONLY tools the user literally names in the problem text —
   // exact catalog matches, no inference ("CRM" never becomes "Salesforce").
@@ -666,7 +691,7 @@ export default function Home() {
       const data = await res.json();
       if (res.ok && data.question && Array.isArray(data.options) && data.options.length >= 2) {
         setClarify({ question: data.question, options: data.options });
-        setClarifyChoice("");
+        setClarifyChoice([]);
         setClarifyExtra("");
         setClarifying(false);
         return; // wait for the user's answer (or skip)
@@ -678,14 +703,14 @@ export default function Home() {
 
   function clarificationText() {
     const parts = [];
-    if (clarify && clarifyChoice) parts.push(`${clarify.question} ${clarifyChoice}`);
+    if (clarify && clarifyChoice.length) parts.push(`${clarify.question} ${clarifyChoice.join(", ")}`);
     if (clarifyExtra.trim()) parts.push(clarifyExtra.trim());
     return parts.join(". ");
   }
 
   // resume=true keeps the already-streamed preview on screen so a retry after
   // a dropped connection feels like continuing, not starting over
-  async function runGeneration(resume: boolean) {
+  async function runGeneration(resume: boolean, refine?: RefineRun) {
     setClarify(null);
     // Same runId across resumes lets the server skip completed stages
     if (!resume || !runIdRef.current) {
@@ -713,21 +738,32 @@ export default function Home() {
       }
     } catch { /* unavailable */ }
 
-    const context = {
-      problem: problem.trim(),
-      size,
-      stack: resolvedStack,
-      budget,
-      timeline,
-      industry: industry.trim(),
-      team,
-      seats: seats.trim(),
-      techLevel,
-      compliance: compliance.join(", ") || "Not specified",
-      clarification: clarificationText().slice(0, 500),
-      preferCloud: preferCloud && detectedCloud ? detectedCloud : "",
-      runId: runIdRef.current,
-    };
+    // A refine run carries the prior report's own context verbatim (so we don't
+    // depend on hydrating every form field back into state first), plus the
+    // change note and prior summary that drive the diff-aware regeneration.
+    const context = refine
+      ? {
+          ...refine.context,
+          clarification: "",
+          refineNote: refine.refineNote,
+          priorSummary: refine.priorSummary,
+          runId: runIdRef.current,
+        }
+      : {
+          problem: problem.trim(),
+          size,
+          stack: resolvedStack,
+          budget,
+          timeline,
+          industry: industry.trim(),
+          team,
+          seats: seats.trim(),
+          techLevel,
+          compliance: compliance.join(", ") || "Not specified",
+          clarification: clarificationText().slice(0, 500),
+          preferCloud: preferCloud && detectedCloud ? detectedCloud : "",
+          runId: runIdRef.current,
+        };
 
     try {
       const res = await fetch("/api/generate", {
@@ -766,7 +802,9 @@ export default function Home() {
             if (data.activity && !data.done) { setActivityFeed((prev) => [...prev, data.activity]); continue; }
             // Completed report sections stream in as partials for the live preview
             if (data.partial && !data.done) { setPreview((prev) => ({ ...prev, [data.partial.key]: data.partial.value })); continue; }
-            setProgress(data.progress ?? 0);
+            // Never let a progress-less event or an out-of-order chunk yank the
+            // ring backwards — it reads as "stuck" or "restarted" to the user
+            if (typeof data.progress === "number") setProgress((p) => Math.max(p, data.progress));
             if (data.message) setStepMessage(data.message);
             if (data.step) {
               setCurrentStep(data.step);
@@ -844,13 +882,18 @@ export default function Home() {
             <Sparkles className="w-3.5 h-3.5" /> One quick question — makes your report far more accurate
           </p>
           <h2 className="text-2xl font-bold">{clarify.question}</h2>
+          <p className="text-white/35 text-xs">Select all that apply</p>
           <div className="flex flex-col gap-2">
-            {clarify.options.map((o) => (
-              <button key={o} type="button" onClick={() => setClarifyChoice(clarifyChoice === o ? "" : o)}
-                className={`text-left px-4 py-3 rounded-xl border text-sm transition-all ${clarifyChoice === o ? "border-blue-500/60 bg-blue-500/10 text-white" : "border-white/15 bg-white/5 text-white/60 hover:border-white/40 hover:text-white"}`}>
-                {clarifyChoice === o && <Check className="w-3.5 h-3.5 inline mr-2 text-blue-400" />}{o}
-              </button>
-            ))}
+            {clarify.options.map((o) => {
+              const selected = clarifyChoice.includes(o);
+              return (
+                <button key={o} type="button"
+                  onClick={() => setClarifyChoice(selected ? clarifyChoice.filter((c) => c !== o) : [...clarifyChoice, o])}
+                  className={`text-left px-4 py-3 rounded-xl border text-sm transition-all ${selected ? "border-blue-500/60 bg-blue-500/10 text-white" : "border-white/15 bg-white/5 text-white/60 hover:border-white/40 hover:text-white"}`}>
+                  {selected && <Check className="w-3.5 h-3.5 inline mr-2 text-blue-400" />}{o}
+                </button>
+              );
+            })}
           </div>
           <input
             value={clarifyExtra}
@@ -862,7 +905,7 @@ export default function Home() {
           <div className="flex gap-3">
             <button type="button" onClick={() => runGeneration(false)}
               className="flex-1 bg-white text-black font-semibold rounded-xl py-3.5 text-sm hover:bg-white/90 transition-all">
-              {clarifyChoice || clarifyExtra.trim() ? "Continue — generate my report" : "Skip — generate anyway"}
+              {clarifyChoice.length || clarifyExtra.trim() ? "Continue — generate my report" : "Skip — generate anyway"}
             </button>
           </div>
         </div>

@@ -1,0 +1,52 @@
+[
+  {
+    "kind": "rating", "rating": "down",
+    "comment": "Snowflake USAGE and CREATE STAGE privileges mentioned in approval thing what does this mean??? it didnt create two solution if aws was implemented and databricks would be good or snowflake",
+    "title": "Databricks Lakehouse for Real-time Omnicom Analytics",
+    "ts": "2026-07-07T19:17:00.209Z"
+  },
+  {
+    "kind": "rating", "rating": "down",
+    "comment": "we are deciding between Databricks vs Snowflake and it treated both like we already run them",
+    "title": "Data Platform Modernization",
+    "problem": "Choosing between Databricks and Snowflake to replace our warehouse",
+    "ts": "2026-07-06T10:00:00.000Z"
+  },
+  {
+    "kind": "rating", "rating": "down",
+    "comment": "The pricing looks wrong, that tool is way more expensive now than what you listed",
+    "title": "Marketing Automation Stack",
+    "ts": "2026-07-05T09:00:00.000Z"
+  },
+  {
+    "kind": "rating", "rating": "down",
+    "comment": "This is way over budget, we said under $10k and this is $25k/mo",
+    "title": "Onboarding Automation",
+    "ts": "2026-07-04T14:00:00.000Z"
+  },
+  {
+    "kind": "rating", "rating": "down",
+    "comment": "We're a clinic and it completely ignored HIPAA, not addressed anywhere",
+    "title": "Patient Intake Automation",
+    "problem": "Automate patient intake and reminders across our three clinic locations",
+    "ts": "2026-07-03T11:00:00.000Z"
+  },
+  {
+    "kind": "rating", "rating": "down",
+    "comment": "too generic, this is obvious surface-level advice I could have written myself",
+    "title": "AI Adoption Plan",
+    "ts": "2026-07-02T16:00:00.000Z"
+  },
+  {
+    "kind": "swap", "rating": null,
+    "detail": "replaced Workato -> we prefer Zapier, Workato is the wrong tool for us",
+    "title": "Ops Automation",
+    "ts": "2026-07-01T12:00:00.000Z"
+  },
+  {
+    "kind": "rating", "rating": "up",
+    "comment": "great, exactly what I needed",
+    "title": "Inventory Sync",
+    "ts": "2026-06-30T12:00:00.000Z"
+  }
+]
