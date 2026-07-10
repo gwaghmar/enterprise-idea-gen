@@ -11,6 +11,8 @@ import {
 import { isPaid, updateHistory } from "@/lib/history";
 import { FREE_MODE } from "@/lib/config";
 import { classifyRefine } from "@/lib/refine-classify";
+import { generateMermaid } from "@/lib/generate-mermaid";
+import JourneyMap from "./journey-map";
 
 // Citations/activity URLs come from external sources — only render links for
 // http(s) URLs so a crafted share payload can't smuggle javascript: links
@@ -1110,6 +1112,14 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* End-to-end journey map — the whole solution in one Mermaid diagram */}
+        {solution.phases && solution.phases.length > 0 && (
+          <div data-journey className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">The Whole Journey — One Picture</h2>
+            <JourneyMap code={generateMermaid(solution, problem, context ?? undefined)} />
           </div>
         )}
 
