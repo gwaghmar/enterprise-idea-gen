@@ -119,6 +119,17 @@ function dataBar(ws: ExcelJS.Worksheet, ref: string, argb: string) {
   });
 }
 
+// A block-character bar drawn with a live REPT formula. Data bars (above)
+// look best on desktop Excel but Apple Numbers / the iPhone Files preview drop
+// them — a text bar is just characters, so it renders EVERYWHERE and still
+// updates live if the numbers change. Belt-and-suspenders for mobile.
+function textBar(ws: ExcelJS.Worksheet, col: number, row: number, valCol: string, startRow: number, endRow: number, argb: string, blocks = 16) {
+  const cell = ws.getCell(row, col);
+  cell.value = { formula: `IFERROR(REPT("█",MAX(1,ROUND(${valCol}${row}/MAX($${valCol}$${startRow}:$${valCol}$${endRow})*${blocks},0))),"")` } as any;
+  cell.font = { color: { argb }, size: 9 };
+  cell.alignment = { horizontal: "left" };
+}
+
 // Parse a phase's week span from its title for the timeline Gantt.
 // "Week 1-2" -> [1,2]; "Week 3" -> [3,3]; "Month 2+" -> ~[5,8]; else 2-wk block.
 function weekSpan(title: string, idx: number): [number, number] {
@@ -140,7 +151,7 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
   // ---------- Dashboard ----------
   const dash = wb.addWorksheet("Dashboard", { views: [{ showGridLines: false }] });
   titleBlock(dash, solution.title || "Implementation Plan", `Pilot plan for: ${problem.slice(0, 140)}`, 4);
-  autosize(dash, [26, 22, 22, 22]);
+  autosize(dash, [28, 18, 12, 26]);
 
   let r = 4;
   dash.getCell(r, 1).value = "KEY METRICS";
@@ -183,6 +194,7 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
       r += 1;
     });
     dataBar(dash, `B${barStart}:B${r - 1}`, ACCENT);
+    for (let rr = barStart; rr < r; rr++) textBar(dash, 4, rr, "B", barStart, r - 1, ACCENT);
     r += 1;
   }
 
@@ -214,6 +226,7 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
       const a = dash.getRow(r); a.getCell(1).value = "Cost of inaction (annual)"; a.getCell(2).value = inactionN; a.getCell(2).numFmt = '"$"#,##0'; r += 1;
       const b = dash.getRow(r); b.getCell(1).value = "This plan (first-year)"; b.getCell(2).value = planN; b.getCell(2).numFmt = '"$"#,##0'; r += 1;
       dataBar(dash, `B${s}:B${r - 1}`, RED);
+      for (let rr = s; rr < r; rr++) textBar(dash, 4, rr, "B", s, r - 1, RED);
     }
     r += 1;
   }
@@ -364,10 +377,10 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
 
   // ---------- Costs ----------
   const costs = wb.addWorksheet("Costs", { views: [{ showGridLines: false, state: "frozen", ySplit: 4 }] });
-  titleBlock(costs, "Cost Breakdown", "Total cost of ownership, first year", 3);
-  autosize(costs, [30, 16, 16]);
+  titleBlock(costs, "Cost Breakdown", "Total cost of ownership, first year", 4);
+  autosize(costs, [30, 16, 16, 24]);
   const costHdr = costs.getRow(4);
-  ["Line Item", "Type", "Cost ($)"].forEach((h, i) => (costHdr.getCell(i + 1).value = h));
+  ["Line Item", "Type", "Cost ($)", ""].forEach((h, i) => (costHdr.getCell(i + 1).value = h));
   styleHeaderRow(costHdr);
 
   let costRow = 5;
@@ -385,7 +398,10 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
     }
     costRow += 1;
   });
-  if (costRow > 5) dataBar(costs, `C5:C${costRow - 1}`, ACCENT);
+  if (costRow > 5) {
+    dataBar(costs, `C5:C${costRow - 1}`, ACCENT);
+    for (let rr = 5; rr < costRow; rr++) textBar(costs, 4, rr, "C", 5, costRow - 1, ACCENT);
+  }
   const totalRow = costRow + 1;
   costs.getCell(totalRow, 1).value = "TOTAL (first year)";
   costs.getCell(totalRow, 1).font = { bold: true, color: { argb: NAVY } };
