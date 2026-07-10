@@ -501,6 +501,11 @@ export default function Home() {
   const [clarifyChoice, setClarifyChoice] = useState<string[]>([]);
   const [clarifyExtra, setClarifyExtra] = useState("");
   const [clarifying, setClarifying] = useState(false);
+  // Was the AI's clarifying question actually relevant? Feedback here tells us
+  // when the question-asking model misfires — data to make it ask better ones.
+  const [clarifyRating, setClarifyRating] = useState<"up" | "down" | null>(null);
+  const [clarifyFbComment, setClarifyFbComment] = useState("");
+  const [clarifyFbSent, setClarifyFbSent] = useState(false);
   const [autoDetected, setAutoDetected] = useState<string[]>([]);
   const [dismissedAuto, setDismissedAuto] = useState<string[]>([]);
   const [preferCloud, setPreferCloud] = useState(false);
@@ -692,6 +697,7 @@ export default function Home() {
       if (res.ok && data.question && Array.isArray(data.options) && data.options.length >= 2) {
         setClarify({ question: data.question, options: data.options });
         setClarifyChoice([]);
+        setClarifyRating(null); setClarifyFbComment(""); setClarifyFbSent(false);
         setClarifyExtra("");
         setClarifying(false);
         return; // wait for the user's answer (or skip)
@@ -699,6 +705,27 @@ export default function Home() {
     } catch { /* proceed without clarification */ }
     setClarifying(false);
     await runGeneration(false);
+  }
+
+  function sendClarifyFeedback(rating: "up" | "down", comment: string) {
+    // Best-effort; never blocks the flow. Logged as kind "clarify" so the
+    // learning loop / analysis can see when the question model misses.
+    try {
+      fetch("/api/feedback", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "clarify", rating, comment,
+          detail: clarify?.question ?? "",
+          problem: problem.trim().slice(0, 400),
+        }),
+      }).catch(() => {});
+    } catch { /* never block */ }
+  }
+
+  function onClarifyThumb(rating: "up" | "down") {
+    setClarifyRating(rating);
+    if (rating === "up") { sendClarifyFeedback("up", ""); setClarifyFbSent(true); }
+    // For 👎 we wait for the optional comment before sending, so the "why" rides along.
   }
 
   function clarificationText() {
@@ -882,6 +909,36 @@ export default function Home() {
             <Sparkles className="w-3.5 h-3.5" /> One quick question — makes your report far more accurate
           </p>
           <h2 className="text-2xl font-bold">{clarify.question}</h2>
+
+          {/* Relevance feedback on the AI's question itself — helps us learn
+              when the question-asking model picks a bad follow-up. */}
+          <div data-clarify-feedback className="flex flex-wrap items-center gap-2 text-xs text-white/40">
+            {clarifyFbSent ? (
+              <span className="text-white/50">Thanks — this helps us ask better questions.</span>
+            ) : (
+              <>
+                <span>Is this question relevant to your prompt?</span>
+                <button type="button" aria-label="Relevant" onClick={() => onClarifyThumb("up")}
+                  className={`px-2 py-1 rounded-lg border transition-all ${clarifyRating === "up" ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300" : "border-white/15 hover:border-white/40 hover:text-white/70"}`}>👍</button>
+                <button type="button" aria-label="Not relevant" onClick={() => onClarifyThumb("down")}
+                  className={`px-2 py-1 rounded-lg border transition-all ${clarifyRating === "down" ? "border-red-500/60 bg-red-500/10 text-red-300" : "border-white/15 hover:border-white/40 hover:text-white/70"}`}>👎</button>
+              </>
+            )}
+          </div>
+          {clarifyRating === "down" && !clarifyFbSent && (
+            <div className="flex gap-2">
+              <input
+                value={clarifyFbComment}
+                onChange={(e) => setClarifyFbComment(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { sendClarifyFeedback("down", clarifyFbComment.trim()); setClarifyFbSent(true); } }}
+                placeholder="What's off about it? (optional)"
+                className="flex-1 bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-white/40"
+              />
+              <button type="button" onClick={() => { sendClarifyFeedback("down", clarifyFbComment.trim()); setClarifyFbSent(true); }}
+                className="px-3 py-2 rounded-lg text-xs border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-all">Send</button>
+            </div>
+          )}
+
           <p className="text-white/35 text-xs">Select all that apply</p>
           <div className="flex flex-col gap-2">
             {clarify.options.map((o) => {

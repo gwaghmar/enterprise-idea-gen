@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const title = typeof body.title === "string" ? body.title.slice(0, 140) : "";
   // Behavioral events feed the learning loop too: tool swaps and remixes are
   // implicit feedback about what the AI got wrong
-  const kind = ["rating", "swap", "remix", "tech", "refine"].includes(body.kind ?? "") ? body.kind : "rating";
+  const kind = ["rating", "swap", "remix", "tech", "refine", "clarify"].includes(body.kind ?? "") ? body.kind : "rating";
   const detail = typeof body.detail === "string" ? body.detail.trim().slice(0, 300) : "";
   // The originating problem, when the client sends it, lets failure analysis
   // graduate a recurring complaint into a runnable golden case (it needs the
