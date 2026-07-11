@@ -432,6 +432,9 @@ ALSO: if the user's update changes any company-profile field shown above (budget
 ${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${preferCloud}. Prefer services native to ${preferCloud.includes("+") ? `these clouds — place each workload on the cloud that already hosts the relevant data and avoid cross-cloud egress; if a workload could live on either, say which and why` : "this cloud"}; price intra-cloud egress at zero and assume their existing enterprise agreement(s) in the TCO; note in approvals that native services skip the new-vendor security review. Any NON-native tool you still recommend must explicitly justify why it beats the native option despite egress and a new vendor review. Mention in the summary that the plan is optimized for their ${preferCloud} environment.` : ""}
 - Pick ONE clear solution approach (don't hedge with "you could also...")
 - STAFF the plan: teamRequired lists every role needed to implement (2-5), each with concrete skills, realistic time commitment, the phases they're needed in, and an honest staffing verdict against the team's stated technical level (${techLevel}): "internal" if the existing team covers it, "upskill" if a short training closes the gap, "contractor" if they must hire — never pretend a no-code team can staff an engineering role
+- STAFF THE RUN, not just the build: include at least one role for operating/supporting the solution AFTER go-live (admin, support owner, on-call) with phases "Ongoing", and fill staffingSummary with honest build-vs-run FTE totals summed from the commitments — implementation teams that vanish at go-live are how these projects die
+- caseStudies: 2-3 real implementation examples taken ONLY from the case-study research above — if the research names the company, use it; otherwise describe the org honestly ("mid-size US insurer") — each MUST carry the sourceUrl it came from. If the research contains no usable real examples, OMIT the caseStudies field entirely; never invent one
+- beforeYouStart: the decisions/gaps to settle before day 1 — unresolved conditionals from the problem statement (e.g. an undecided cloud migration), prerequisites, and anything you deliberately cut from scope
 - Lead with the insight most companies miss about this problem
 - Choose tools that ACTUALLY integrate with ${stack} — verify from the research above
 - If the problem describes a head-to-head decision between two or more specific tools (e.g. "X vs Y", "deciding between X and Y", "replace X with Y"), do NOT treat the losing candidate as already-deployed infrastructure anywhere in the report — no permissions, no federation/integration steps, no TCO line item for it unless it is explicitly kept as a supporting tool. Every permission/access item you list must state in plain language WHY it's needed (who uses it and for what), not just the raw privilege name
@@ -548,10 +551,14 @@ Return ONLY valid JSON, no markdown, no explanation:
       "role": "Concrete role name — e.g. Integration Engineer",
       "skills": ["Specific skill", "Another — e.g. AWS Connect flows", "Max 4"],
       "commitment": "e.g. ~50% for weeks 1-4, then 2 hrs/week",
-      "phases": "Which phases — e.g. Phase 1-2",
+      "phases": "Which phases — e.g. Phase 1-2, or 'Ongoing' for run/support roles",
       "staffing": "internal | upskill | contractor — judged against the team's stated technical level"
     }
   ],
+  "staffingSummary": {
+    "buildFte": "Total effort during implementation, summed from the commitments above — e.g. '~2.5 FTE for the build'",
+    "runFte": "Ongoing effort after go-live — e.g. '~0.5 FTE ongoing (admin + support)'"
+  },
   "estimatedCost": "Itemized: Tool A $X/mo + Tool B $Y/mo = $Z/mo total",
   "timeToImplement": "Realistic timeline for ${size}${openTimeline ? " (recommend it — no deadline was given)" : ` with ${timeline} urgency`}",
   "tco": {
@@ -561,8 +568,17 @@ Return ONLY valid JSON, no markdown, no explanation:
     "oneTimeSetup": "Total one-time/setup cost — e.g. $6,500 (implementation + training + data migration)",
     "monthlyRecurring": "Total recurring — e.g. $2,400/mo",
     "firstYearTotal": "One-time + 12 months recurring — e.g. $35,300",
+    "yearTwoRunRate": "Ongoing annual cost once implemented (12 months recurring, no one-time items) — e.g. $28,800/yr",
     "hiddenCosts": ["A real hidden cost most teams miss — e.g. internal eng time for setup", "Another"]
   },
+  "caseStudies": [
+    { "org": "Type of organization (industry + rough size — use the real company name ONLY if the research names it)", "problem": "The business problem they faced, one line", "approach": "What they implemented, one line", "outcome": "The measurable result, one line", "lesson": "The transferable lesson for THIS company, one line", "sourceUrl": "The research citation URL this comes from — REQUIRED, must be one of the provided source URLs" }
+  ],
+  "operations": {
+    "monitoring": ["How you'll know it's healthy — a concrete signal to watch and where (e.g. 'Snowflake credit usage dashboard, alert at 80% of budget')", "Another — e.g. pipeline failure alerting", "2-4 items"],
+    "scalability": "One or two sentences: what happens at 5-10x volume/users — what holds, what needs upgrading first, rough trigger point"
+  },
+  "beforeYouStart": ["A decision or gap to settle BEFORE implementation begins — e.g. 'Confirm whether the AWS migration is happening this year; it changes the region strategy'", "Another — deliberate scope cuts, prerequisites, or open questions. 2-4 items."],
   "kpis": [
     { "metric": "What to measure — e.g. Manual reconciliation hours/week", "baseline": "Where they are now — e.g. 15 hrs/week", "target": "Where they should get to — e.g. < 2 hrs/week", "timeframe": "By when — e.g. End of Phase 2" }
   ],
