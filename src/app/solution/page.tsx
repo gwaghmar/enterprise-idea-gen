@@ -185,7 +185,7 @@ interface Kpi { metric: string; baseline?: string; target: string; timeframe?: s
 interface AdoptionStep { title: string; detail: string; }
 interface Alternative { name: string; summary: string; tools?: string[]; estimatedCost?: string; tradeoff?: string; }
 interface Evaluated { name: string; verdict: string; reason: string; sourceUrl?: string; }
-interface TeamRole { role: string; skills?: string[]; commitment?: string; phases?: string; staffing?: string; }
+interface TeamRole { role: string; count?: number; skills?: string[]; commitment?: string; phases?: string; staffing?: string; }
 interface Solution {
   title: string; insight?: string; insightSourceUrl?: string; insightSourceUrls?: string[]; insightSourceQuote?: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
@@ -456,7 +456,6 @@ export default function SolutionPage() {
   const [exporting, setExporting] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [roiData, setRoiData] = useState<{ weeklyHours: number; teamSize: number; hourlyRate: number } | null>(null);
-  const [askBtn, setAskBtn] = useState<{ text: string; top: number; left: number } | null>(null);
   const [sid, setSid] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
   const [paidReal, setPaidReal] = useState(false);
@@ -469,27 +468,10 @@ export default function SolutionPage() {
   const rawDataRef = useRef<Record<string, unknown>>({});
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Show a floating "Ask AI" button when the user selects text inside the report
-  useEffect(() => {
-    function onSelect() {
-      const sel = window.getSelection();
-      const text = sel?.toString().trim() ?? "";
-      if (!sel || text.length < 3 || text.length > 600 || sel.rangeCount === 0) { setAskBtn(null); return; }
-      const range = sel.getRangeAt(0);
-      const container = contentRef.current;
-      if (!container || !container.contains(range.commonAncestorContainer)) { setAskBtn(null); return; }
-      const rect = range.getBoundingClientRect();
-      if (rect.width === 0 && rect.height === 0) { setAskBtn(null); return; }
-      setAskBtn({ text, top: rect.top + window.scrollY - 44, left: rect.left + window.scrollX + rect.width / 2 });
-    }
-    function onSelectionChange() { if (!window.getSelection()?.toString().trim()) setAskBtn(null); }
-    document.addEventListener("mouseup", onSelect);
-    document.addEventListener("selectionchange", onSelectionChange);
-    return () => {
-      document.removeEventListener("mouseup", onSelect);
-      document.removeEventListener("selectionchange", onSelectionChange);
-    };
-  }, []);
+  // (The old mouseup-based "Ask AI" button was removed: touch devices never
+  // fire mouseup, and on desktop it duplicated the selectionchange chip below
+  // — one selection could pop two overlapping Ask-AI elements. The
+  // selectionchange chip works on mouse, touch, and keyboard selection alike.)
 
   useEffect(() => {
     const raw = sessionStorage.getItem("solution");
@@ -820,19 +802,6 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
       {selectedItem && <ExplainPopup item={selectedItem} solutionContext={solutionContext} fullSolution={solution} onEdit={handleSolutionEdit} onClose={() => setSelectedItem(null)} />}
       {showActivity && <ActivityModal activity={activity} focusUrl={activityFocus} onClose={() => { setShowActivity(false); setActivityFocus(null); }} />}
 
-      {/* Floating "Ask AI" button on text selection */}
-      {askBtn && (
-        <button
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => { pick(askBtn.text, "Selected text"); setAskBtn(null); window.getSelection()?.removeAllRanges(); }}
-          style={{ position: "absolute", top: askBtn.top, left: askBtn.left, transform: "translateX(-50%)" }}
-          className="z-40 flex items-center gap-1.5 bg-white text-black text-xs font-semibold rounded-full px-3 py-1.5 shadow-xl shadow-black/40 hover:bg-white/90 transition-all animate-in fade-in"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          Ask AI
-        </button>
-      )}
-
       <div ref={contentRef} className="max-w-5xl mx-auto px-6 py-12">
 
         {/* Top nav */}
@@ -841,7 +810,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
             <a href="/" className="text-white/40 text-sm hover:text-white/70 transition-colors flex items-center gap-1.5"><ArrowLeft className="w-4 h-4" /> New solution</a>
             <a href="/history" className="text-white/40 text-sm hover:text-white/70 transition-colors flex items-center gap-1.5"><History className="w-4 h-4" /> My solutions</a>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <button onClick={handleEmailMe} disabled={emailing}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm border border-white/15 text-white/60 hover:text-white hover:border-white/30 disabled:opacity-50 transition-all">
               <Mail className="w-3.5 h-3.5" /> {emailing ? "Preparing..." : "Email me"}
@@ -929,7 +898,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
             data-askai
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => { pick(askSel.text.slice(0, 300), "Selected text"); setAskSel(null); window.getSelection()?.removeAllRanges(); }}
-            style={{ left: askSel.x, top: Math.max(askSel.y - 40, 8) }}
+            style={{ left: askSel.x, top: Math.max(askSel.y - 56, 8) }}
             className="fixed z-50 -translate-x-1/2 flex items-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-semibold rounded-full px-3.5 py-2 shadow-lg transition-colors"
           >
             <Sparkles className="w-3.5 h-3.5" /> Ask AI
@@ -1206,7 +1175,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
               {solution.teamRequired.map((r, i) => (
                 <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
                   <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <span className="font-semibold text-white text-sm">{r.role}</span>
+                    <span className="font-semibold text-white text-sm">{(r.count ?? 1) > 1 ? `${r.count}× ` : ""}{r.role}</span>
                     <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 ${
                       r.staffing === "contractor" ? "border-amber-500/40 text-amber-400/90"
                       : r.staffing === "upskill" ? "border-blue-500/40 text-blue-400/90"
