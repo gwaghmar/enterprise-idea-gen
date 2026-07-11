@@ -433,6 +433,7 @@ ${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${prefe
 - Pick ONE clear solution approach (don't hedge with "you could also...")
 - STAFF the plan: teamRequired lists every role needed to implement (2-5), each with concrete skills, realistic time commitment, the phases they're needed in, and an honest staffing verdict against the team's stated technical level (${techLevel}): "internal" if the existing team covers it, "upskill" if a short training closes the gap, "contractor" if they must hire — never pretend a no-code team can staff an engineering role
 - STAFF THE RUN, not just the build: include at least one role for operating/supporting the solution AFTER go-live (admin, support owner, on-call) with phases "Ongoing", and fill staffingSummary with honest build-vs-run FTE totals summed from the commitments — implementation teams that vanish at go-live are how these projects die
+- Each teamRequired role carries "count": the NUMBER of people needed in that role (an integer, usually 1; e.g. 2 data engineers for a multi-ERP migration at this scale). Ground it in the workload — never inflate
 - caseStudies: 2-3 real implementation examples taken ONLY from the case-study research above — if the research names the company, use it; otherwise describe the org honestly ("mid-size US insurer") — each MUST carry the sourceUrl it came from. If the research contains no usable real examples, OMIT the caseStudies field entirely; never invent one
 - beforeYouStart: the decisions/gaps to settle before day 1 — unresolved conditionals from the problem statement (e.g. an undecided cloud migration), prerequisites, and anything you deliberately cut from scope
 - Lead with the insight most companies miss about this problem
@@ -549,6 +550,7 @@ Return ONLY valid JSON, no markdown, no explanation:
   "teamRequired": [
     {
       "role": "Concrete role name — e.g. Integration Engineer",
+      "count": 1,
       "skills": ["Specific skill", "Another — e.g. AWS Connect flows", "Max 4"],
       "commitment": "e.g. ~50% for weeks 1-4, then 2 hrs/week",
       "phases": "Which phases — e.g. Phase 1-2, or 'Ongoing' for run/support roles",

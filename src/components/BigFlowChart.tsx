@@ -45,7 +45,7 @@ const groupAccent: Record<string, string> = {
   red: "#EF4444", blue: "#3B82F6", slate: "#94A3B8", green: "#22C55E",
 };
 
-interface Props { nodes: FNode[]; edges: FEdge[]; groups: FGroup[]; }
+interface Props { nodes: FNode[]; edges: FEdge[]; groups: FGroup[]; minimap?: boolean; }
 
 function layout(nodes: FNode[], edges: FEdge[], groups: FGroup[]) {
   const pos: Record<string, { x: number; y: number }> = {};
@@ -98,7 +98,7 @@ function layout(nodes: FNode[], edges: FEdge[], groups: FGroup[]) {
   return { pos, boxes, totalW: xCursor + NW + GROUP_PAD, totalH: maxGroupH };
 }
 
-function BigFlowChartInner({ nodes, edges, groups }: Props) {
+function BigFlowChartInner({ nodes, edges, groups, minimap = true }: Props) {
   const { pos, boxes } = layout(nodes, edges, groups);
 
   const rfNodes: Node[] = [
@@ -168,14 +168,17 @@ function BigFlowChartInner({ nodes, edges, groups }: Props) {
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       fitView
-      fitViewOptions={{ padding: 0.1, maxZoom: 1 }}
+      // minZoom floor keeps a dense enterprise diagram readable on first
+      // paint — it starts left-anchored at a legible size and the user pans,
+      // instead of fitting 40 tiny unreadable boxes into the frame.
+      fitViewOptions={{ padding: 0.1, maxZoom: 1, minZoom: 0.5 }}
       minZoom={0.15}
       maxZoom={1.5}
       proOptions={{ hideAttribution: true }}
     >
       <Background color="#E0E0E0" gap={20} variant={BackgroundVariant.Dots} style={{ background: "#FFFFFF" }} />
       <Controls style={{ background: "#fff", border: "1px solid #E0E0E0", boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }} />
-      <MiniMap style={{ background: "#fff", border: "1px solid #E0E0E0" }} nodeColor={() => "#93C5FD"} maskColor="rgba(240,240,240,0.6)" />
+      {minimap && <MiniMap style={{ background: "#fff", border: "1px solid #E0E0E0" }} nodeColor={() => "#93C5FD"} maskColor="rgba(240,240,240,0.6)" />}
     </ReactFlow>
   );
 }

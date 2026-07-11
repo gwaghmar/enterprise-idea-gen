@@ -51,7 +51,7 @@ export default function ArchitectureMap({ solution }: { solution: any }) {
           </button>
         </div>
       </div>
-      <BigFlowChart nodes={flow.nodes} edges={flow.edges} groups={flow.groups} />
+      <BigFlowChart nodes={flow.nodes} edges={flow.edges} groups={flow.groups} minimap={false} />
       <p className="text-white/25 text-[11px] mt-2 flex flex-wrap gap-x-3">
         <span>🆕 New</span><span>🔹 Existing</span><span>🗑️ Being replaced</span><span>🛡️ Security control</span>
       </p>

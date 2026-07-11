@@ -131,6 +131,7 @@ export function normalizeSolution(raw: any): any {
     })).filter((c: any) => c.name && c.reason).slice(0, 10),
     teamRequired: arr(s.teamRequired).map((r: any) => ({
       role: str(r?.role, 80),
+      count: Math.min(20, Math.max(1, Math.round(Number(r?.count)) || 1)),
       skills: strArr(r?.skills, 4, 80),
       commitment: str(r?.commitment, 90),
       phases: str(r?.phases, 60),

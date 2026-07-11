@@ -37,6 +37,7 @@ interface LineItem {
 }
 interface TeamRole {
   role: string;
+  count?: number;
   skills: string[];
   commitment: string;
   phases: string;
@@ -460,7 +461,7 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
     let teamRow = 5;
     solution.teamRequired.forEach((role) => {
       const row = team.getRow(teamRow);
-      row.getCell(1).value = role.role;
+      row.getCell(1).value = `${(role.count ?? 1) > 1 ? `${role.count}× ` : ""}${role.role}`;
       row.getCell(1).font = { bold: true };
       row.getCell(2).value = role.skills.join(", ");
       row.getCell(3).value = role.commitment;

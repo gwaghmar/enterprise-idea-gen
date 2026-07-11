@@ -17,15 +17,20 @@ interface Solution {
   title: string; insight?: string; summary: string; tools: Tool[]; assumptions?: string[];
   costOfInaction?: { annualCost: string; basis: string; paybackPeriod?: string };
   evaluated?: { name: string; verdict: string; reason: string }[];
-  teamRequired?: { role: string; skills?: string[]; commitment?: string; phases?: string; staffing?: string }[];
+  teamRequired?: { role: string; count?: number; skills?: string[]; commitment?: string; phases?: string; staffing?: string }[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
   rolloutPlaybook?: { stakeholders?: Stakeholder[]; tickets?: Ticket[] };
   approvals?: { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[] };
   vendorOutreach?: { howToReach?: string; email?: string; demoChecklist?: string[] };
-  tco?: { lineItems?: TcoLineItem[]; oneTimeSetup?: string; monthlyRecurring?: string; firstYearTotal?: string; hiddenCosts?: string[] };
+  tco?: { lineItems?: TcoLineItem[]; oneTimeSetup?: string; monthlyRecurring?: string; firstYearTotal?: string; yearTwoRunRate?: string; hiddenCosts?: string[] };
   kpis?: Kpi[];
   adoptionPlan?: AdoptionStep[];
   alternative?: { name: string; summary: string; tools?: string[]; estimatedCost?: string; tradeoff?: string };
+  staffingSummary?: { buildFte: string; runFte?: string };
+  caseStudies?: { org: string; problem: string; approach: string; outcome: string; lesson: string; sourceUrl?: string }[];
+  operations?: { monitoring?: string[]; scalability?: string };
+  beforeYouStart?: string[];
+  dataFlow?: { from: string; to: string; via: string; note?: string }[];
 }
 interface Context {
   size: string; stack: string; budget: string; timeline: string;
@@ -696,13 +701,20 @@ export async function generatePDF(
     if (solution.teamRequired && solution.teamRequired.length > 0) {
       flowRoom(30);
       y = sectionLabel(doc, "Team & Skills Required", y);
+      if (solution.staffingSummary?.buildFte) {
+        flowRoom(10);
+        const run = solution.staffingSummary.runFte ? `   ·   Run: ${solution.staffingSummary.runFte}` : "";
+        y = wrapText(doc, `Build: ${solution.staffingSummary.buildFte}${run}`, ML, y, CW, 8.5, C.accent, "bold");
+        y += 3;
+      }
       solution.teamRequired.forEach((r) => {
         flowRoom(16);
         doc.setFontSize(8.5);
         doc.setTextColor(...C.dark);
         doc.setFont("helvetica", "bold");
         const staffTag = r.staffing === "contractor" ? "[HIRE/CONTRACTOR]" : r.staffing === "upskill" ? "[UPSKILL]" : "[INTERNAL]";
-        doc.text(`${r.role}  ${staffTag}`, ML, y);
+        const countTag = (r.count ?? 1) > 1 ? `${r.count}x ` : "";
+        doc.text(`${countTag}${r.role}  ${staffTag}`, ML, y);
         y += 4.5;
         doc.setFontSize(7.5);
         doc.setTextColor(...C.mid);
@@ -809,9 +821,10 @@ export async function generatePDF(
         y += 3;
       }
       const totals: { label: string; val: string }[] = [
-        { label: "One-time setup", val: tco.oneTimeSetup ?? "" },
-        { label: "Monthly recurring", val: tco.monthlyRecurring ?? "" },
+        { label: "CAPEX — one-time setup", val: tco.oneTimeSetup ?? "" },
+        { label: "OPEX — monthly recurring", val: tco.monthlyRecurring ?? "" },
         { label: "First-year total", val: tco.firstYearTotal ?? "" },
+        { label: "Year-2 run rate", val: tco.yearTwoRunRate ?? "" },
       ].filter((t) => t.val);
       totals.forEach(({ label, val }) => {
         roomCost(8);
@@ -859,6 +872,50 @@ export async function generatePDF(
       y += 4;
     }
 
+    // Operations — how you'll know it's working, and what breaks at scale
+    const ops = solution.operations;
+    if (ops && ((ops.monitoring && ops.monitoring.length) || ops.scalability)) {
+      roomCost(28);
+      y = sectionLabel(doc, "Operations — Monitoring & Scale", y);
+      if (ops.monitoring && ops.monitoring.length) {
+        ops.monitoring.forEach((m) => { roomCost(10); y = wrapText(doc, `- ${m}`, ML + 2, y, CW - 4, 7.8, C.mid, "normal"); y += 1; });
+      }
+      if (ops.scalability) {
+        roomCost(12);
+        y = wrapText(doc, `At 10x scale: ${ops.scalability}`, ML, y + 1.5, CW, 7.8, C.dark, "italic");
+      }
+      y += 5;
+    }
+
+    // Case studies — real implementations from the research
+    if (solution.caseStudies && solution.caseStudies.length > 0) {
+      roomCost(36);
+      y = sectionLabel(doc, "Who Else Has Done This", y);
+      solution.caseStudies.forEach((cs) => {
+        roomCost(30);
+        doc.setFontSize(8.5); doc.setTextColor(...C.dark); doc.setFont("helvetica", "bold");
+        y = wrapText(doc, cs.org, ML, y, CW, 8.5, C.dark, "bold");
+        y = wrapText(doc, `Problem: ${cs.problem}`, ML + 2, y + 0.5, CW - 4, 7.5, C.mid, "normal");
+        y = wrapText(doc, `Approach: ${cs.approach}`, ML + 2, y + 0.5, CW - 4, 7.5, C.mid, "normal");
+        y = wrapText(doc, `Outcome: ${cs.outcome}`, ML + 2, y + 0.5, CW - 4, 7.5, [5, 150, 105], "normal");
+        y = wrapText(doc, `Lesson for you: ${cs.lesson}`, ML + 2, y + 0.5, CW - 4, 7.5, C.accent, "italic");
+        y += 3.5;
+      });
+      y += 2;
+    }
+
+    // Settle these before you start
+    if (solution.beforeYouStart && solution.beforeYouStart.length > 0) {
+      roomCost(24);
+      y = sectionLabel(doc, "Settle These Before You Start", y);
+      solution.beforeYouStart.forEach((b, i) => {
+        roomCost(10);
+        y = wrapText(doc, `${i + 1}. ${b}`, ML + 2, y, CW - 4, 7.8, C.dark, "normal");
+        y += 1.5;
+      });
+      y += 4;
+    }
+
     // Alternative
     if (alt && alt.name) {
       roomCost(30);
@@ -871,6 +928,65 @@ export async function generatePDF(
       if (alt.tradeoff) y = wrapText(doc, `Tradeoff: ${alt.tradeoff}`, ML, y + 1, CW, 7.5, C.mid, "italic");
     }
 
+    pageNum(page);
+  }
+
+  // ══════════════════════════════════════════════
+  // PAGE — SYSTEM ARCHITECTURE (when env/dataFlow data exists)
+  // ══════════════════════════════════════════════
+  const archTools = (solution.tools ?? []).filter((t: any) => t.environment);
+  const archFlows = solution.dataFlow ?? [];
+  if (archTools.length || archFlows.length) {
+    pageNum(page);
+    doc.addPage(); page++;
+    doc.setFillColor(...C.bgLight); doc.rect(0, 0, W, H, "F");
+    doc.setFillColor(...C.accent); doc.rect(0, 0, W, 1.5, "F");
+    y = MT;
+    doc.setFontSize(8); doc.setTextColor(...C.light); doc.setFont("helvetica", "normal");
+    doc.text(solution.title.toUpperCase(), ML, y + 4);
+    y += 12;
+    toc.push({ label: "System architecture", page });
+    y = sectionLabel(doc, "System Architecture — How The Systems Connect", y);
+
+    // Build the same graph the web renders, drawn with the existing native
+    // flowchart primitives (helvetica can't render emojis — strip non-ASCII).
+    const ascii = (s: string) => s.replace(/[^\x20-\x7E\n]/g, "").replace(/\s+/g, " ").trim();
+    const nameToId = new Map<string, string>();
+    const archNodes: FlowNode[] = [];
+    const typeOf = (t: any) => (t.status === "replaced" ? "end" : t.status === "existing" ? "decision" : "process");
+    (solution.tools ?? []).forEach((t: any, i: number) => {
+      const id = `a${i}`;
+      nameToId.set(String(t.name).toLowerCase(), id);
+      const env = t.environment ? ` [${t.environment}]` : "";
+      const sens = t.dataSensitivity ? ` (${t.dataSensitivity})` : "";
+      archNodes.push({ id, label: ascii(`${t.name}${env}${sens}`), type: typeOf(t) });
+    });
+    const archEdges: FlowEdge[] = [];
+    archFlows.forEach((d, i) => {
+      let f = nameToId.get(String(d.from).toLowerCase());
+      let to = nameToId.get(String(d.to).toLowerCase());
+      if (!f) { f = `x${i}f`; nameToId.set(String(d.from).toLowerCase(), f); archNodes.push({ id: f, label: ascii(d.from), type: "decision" }); }
+      if (!to) { to = `x${i}t`; nameToId.set(String(d.to).toLowerCase(), to); archNodes.push({ id: to, label: ascii(d.to), type: "decision" }); }
+      archEdges.push({ from: f, to, label: ascii(d.via) });
+    });
+    const chartH = 120;
+    doc.setFillColor(...C.white);
+    doc.setDrawColor(...C.rule);
+    doc.roundedRect(ML, y, CW, chartH, 2, 2, "FD");
+    drawFlowChart(doc, archNodes, archEdges, ML + 4, y + 4, CW - 8, chartH - 8);
+    y += chartH + 6;
+    doc.setFontSize(7); doc.setTextColor(...C.light); doc.setFont("helvetica", "normal");
+    doc.text("Blue = new   ·   Amber = existing   ·   Red = being replaced   ·   Edge labels show how data moves", ML, y);
+    y += 6;
+    // Security & access controls under the diagram
+    const controls = solution.approvals?.itControls ?? [];
+    if (controls.length) {
+      y = sectionLabel(doc, "Security & Access Layer", y + 2);
+      controls.slice(0, 4).forEach((c) => {
+        y = wrapText(doc, `- ${c.name}: ${c.action}`, ML + 2, y, CW - 4, 7.5, C.mid, "normal");
+        y += 1;
+      });
+    }
     pageNum(page);
   }
 

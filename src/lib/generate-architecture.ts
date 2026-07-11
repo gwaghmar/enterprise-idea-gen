@@ -88,35 +88,34 @@ export function buildArchitectureFlow(solution: any): ArchitectureFlow {
   });
 
   // Connections — the actual "how do these talk to each other" edges.
+  // Endpoints not in tools[] (e.g. an existing ERP kept in place) go into a
+  // dedicated "External / Existing" group so they lay out as a tidy column
+  // instead of loose nodes colliding with controls (the E2E clutter finding).
   const dataFlow: any[] = solution?.dataFlow ?? [];
+  let externalGroupAdded = false;
+  const ensureExternal = (name: string): string => {
+    const id = `ext_${slug(name)}`;
+    if (!nodes.some((n) => n.id === id)) {
+      if (!externalGroupAdded) { groups.push({ id: "external", label: "🏢 External / Existing systems", accent: "slate" }); externalGroupAdded = true; }
+      nodes.push({ id, label: `🏢 ${clip(name, 26)}`, type: "stack", group: "external" });
+    }
+    return id;
+  };
   dataFlow.forEach((d) => {
-    let fromId = idByName.get(String(d.from ?? "").toLowerCase());
-    let toId = idByName.get(String(d.to ?? "").toLowerCase());
-    // Endpoint not in tools[] (e.g. an existing ERP kept in place) — add it
-    // as a loose "external system" node so the connection still draws.
-    if (!fromId) {
-      fromId = `ext_${slug(d.from)}`;
-      if (!nodes.some((n) => n.id === fromId)) nodes.push({ id: fromId, label: `🏢 ${clip(d.from, 26)}`, type: "stack" });
-    }
-    if (!toId) {
-      toId = `ext_${slug(d.to)}`;
-      if (!nodes.some((n) => n.id === toId)) nodes.push({ id: toId, label: `🏢 ${clip(d.to, 26)}`, type: "stack" });
-    }
+    const fromId = idByName.get(String(d.from ?? "").toLowerCase()) ?? ensureExternal(String(d.from));
+    const toId = idByName.get(String(d.to ?? "").toLowerCase()) ?? ensureExternal(String(d.to));
     edges.push({ from: fromId, to: toId, label: clip(d.via, 20) + (d.note ? ` (${clip(d.note, 16)})` : "") });
   });
 
-  // Security / access layer — reuse approvals.itControls, don't ask twice.
-  // Loose nodes dashed into every environment's first node (what it protects).
+  // Security / access layer — its own labeled group, NO fan-out edges: the
+  // dashed lines from every control to every environment were pure clutter.
   const controls: any[] = (solution?.approvals?.itControls ?? []).slice(0, 3);
-  const envAnchors = envList.map((env) => {
-    const gid = slug(env);
-    return nodes.find((n) => n.group === gid)?.id;
-  }).filter(Boolean) as string[];
-  controls.forEach((c, i) => {
-    const id = `sec${i}`;
-    nodes.push({ id, label: `🛡️ ${clip(c.name, 30)}`, type: "team" });
-    envAnchors.forEach((anchor) => edges.push({ from: id, to: anchor, dashed: true }));
-  });
+  if (controls.length) {
+    groups.push({ id: "security", label: "🛡️ Security & Access (applies to all)", accent: "slate" });
+    controls.forEach((c, i) => {
+      nodes.push({ id: `sec${i}`, label: `🛡️ ${clip(c.name, 30)}`, type: "team", group: "security" });
+    });
+  }
 
   return { nodes, edges, groups };
 }
