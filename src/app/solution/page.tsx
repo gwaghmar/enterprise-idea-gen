@@ -14,6 +14,7 @@ import { classifyRefine } from "@/lib/refine-classify";
 import JourneyMap from "./journey-map";
 import ArchitectureMap from "./architecture-map";
 import { hasArchitectureData } from "@/lib/generate-architecture";
+import { rollupForRole } from "@/lib/role-rollup";
 
 // Citations/activity URLs come from external sources — only render links for
 // http(s) URLs so a crafted share payload can't smuggle javascript: links
@@ -1223,6 +1224,27 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                   <p className="text-white/45 text-xs">
                     {[r.commitment, r.phases].filter(Boolean).join(" · ")}
                   </p>
+                  {(() => {
+                    // Per-role responsibility rollup — derived, not generated
+                    const roll = rollupForRole(r.role, solution);
+                    if (!roll.duties.length && !roll.responsibility) return null;
+                    return (
+                      <div data-role-duties className="mt-2.5 border-t border-white/10 pt-2.5">
+                        <p className="text-white/35 text-[10px] uppercase tracking-wider mb-1.5">What they&apos;ll do</p>
+                        {roll.responsibility && (
+                          <p className="text-white/55 text-xs mb-1.5">{roll.responsibility}</p>
+                        )}
+                        <ul className="space-y-1">
+                          {roll.duties.map((d, j) => (
+                            <li key={j} className="flex gap-1.5 text-xs text-white/50">
+                              <span className="text-white/25 shrink-0">▸</span>
+                              <span>{d.text} <span className="text-white/30">({d.phase})</span></span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>
