@@ -152,8 +152,28 @@ export function normalizeSolution(raw: any): any {
       oneTimeSetup: shortValue(s.tco.oneTimeSetup, 40),
       monthlyRecurring: shortValue(s.tco.monthlyRecurring, 40),
       firstYearTotal: shortValue(s.tco.firstYearTotal, 40),
+      yearTwoRunRate: shortValue(s.tco.yearTwoRunRate, 40) || undefined,
       hiddenCosts: strArr(s.tco.hiddenCosts, 5, 250),
     } : undefined,
+    staffingSummary: s.staffingSummary && typeof s.staffingSummary === "object" && str(s.staffingSummary.buildFte, 80) ? {
+      buildFte: str(s.staffingSummary.buildFte, 80),
+      runFte: str(s.staffingSummary.runFte, 80) || undefined,
+    } : undefined,
+    // Case studies must be grounded: a real research citation URL is the
+    // price of admission — an example without a source gets dropped entirely.
+    caseStudies: arr(s.caseStudies).map((c: any) => ({
+      org: str(c?.org, 90),
+      problem: str(c?.problem, 200),
+      approach: str(c?.approach, 200),
+      outcome: str(c?.outcome, 200),
+      lesson: str(c?.lesson, 250),
+      sourceUrl: httpUrl(c?.sourceUrl),
+    })).filter((c: any) => c.org && c.problem && c.outcome && c.sourceUrl).slice(0, 3),
+    operations: s.operations && typeof s.operations === "object" ? {
+      monitoring: strArr(s.operations.monitoring, 4, 200),
+      scalability: str(s.operations.scalability, 350) || undefined,
+    } : undefined,
+    beforeYouStart: strArr(s.beforeYouStart, 4, 250),
     alternative: s.alternative && typeof s.alternative === "object" && str(s.alternative.name, 90) ? {
       name: str(s.alternative.name, 90),
       summary: str(s.alternative.summary, 500),

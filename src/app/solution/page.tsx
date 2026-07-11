@@ -177,7 +177,9 @@ interface RolloutPlaybook { stakeholders?: Stakeholder[]; tickets?: Ticket[]; }
 interface Approvals { permissions?: Permission[]; itControls?: ITControl[]; riskAssessment?: Risk[]; }
 interface VendorOutreach { howToReach?: string; email?: string; demoChecklist?: string[]; }
 interface TcoLineItem { item: string; type: string; cost: string; sourceUrl?: string; sourceQuote?: string; }
-interface Tco { lineItems?: TcoLineItem[]; oneTimeSetup?: string; monthlyRecurring?: string; firstYearTotal?: string; hiddenCosts?: string[]; }
+interface Tco { lineItems?: TcoLineItem[]; oneTimeSetup?: string; monthlyRecurring?: string; firstYearTotal?: string; yearTwoRunRate?: string; hiddenCosts?: string[]; }
+interface CaseStudy { org: string; problem: string; approach: string; outcome: string; lesson: string; sourceUrl?: string; }
+interface Operations { monitoring?: string[]; scalability?: string; }
 interface Kpi { metric: string; baseline?: string; target: string; timeframe?: string; }
 interface AdoptionStep { title: string; detail: string; }
 interface Alternative { name: string; summary: string; tools?: string[]; estimatedCost?: string; tradeoff?: string; }
@@ -190,6 +192,10 @@ interface Solution {
   tco?: Tco; kpis?: Kpi[]; adoptionPlan?: AdoptionStep[]; alternative?: Alternative;
   assumptions?: string[]; showHoursRoi?: boolean; evaluated?: Evaluated[]; teamRequired?: TeamRole[];
   dataFlow?: DataFlowLink[];
+  staffingSummary?: { buildFte: string; runFte?: string };
+  caseStudies?: CaseStudy[];
+  operations?: Operations;
+  beforeYouStart?: string[];
   costOfInaction?: { annualCost: string; basis: string; paybackPeriod?: string };
 }
 interface Context {
@@ -1034,6 +1040,23 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
           </div>
         )}
 
+        {/* Before you start — decisions to settle before day 1 */}
+        {solution.beforeYouStart && solution.beforeYouStart.length > 0 && (
+          <div data-beforeyoustart className="mb-12 bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5">
+            <p className="text-blue-400/80 text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <Target className="w-3.5 h-3.5" /> Settle these before you start
+            </p>
+            <ul className="mt-3 space-y-2">
+              {solution.beforeYouStart.map((b, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-white/65">
+                  <span className="text-blue-400/60 shrink-0 mt-0.5 font-semibold">{i + 1}.</span>
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Unlock banner — the implementation kit sits behind the $1 */}
         {!unlocked && (
           <div className="mb-12 border border-white/20 bg-gradient-to-br from-white/8 to-white/3 rounded-2xl p-6">
@@ -1093,11 +1116,12 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                   </table>
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className={`grid grid-cols-1 sm:grid-cols-2 ${solution.tco.yearTwoRunRate ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-3`}>
                 {[
-                  { label: "One-time setup", value: solution.tco.oneTimeSetup },
-                  { label: "Monthly recurring", value: solution.tco.monthlyRecurring },
+                  { label: "CAPEX — one-time setup", value: solution.tco.oneTimeSetup },
+                  { label: "OPEX — monthly recurring", value: solution.tco.monthlyRecurring },
                   { label: "First-year total", value: solution.tco.firstYearTotal, highlight: true },
+                  { label: "Year-2 run rate", value: solution.tco.yearTwoRunRate },
                 ].filter((m) => m.value).map((m) => (
                   <div key={m.label} className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
                     <p className="text-white/40 text-xs mb-1">{m.label}</p>
@@ -1137,11 +1161,46 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
           </div>
         )}
 
+        {/* Operations — monitoring & scale. Rendered independently of the
+            architecture diagram so it survives when env/dataFlow is absent. */}
+        {solution.operations && ((solution.operations.monitoring?.length ?? 0) > 0 || solution.operations.scalability) && (
+          <div data-operations className="mb-12 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {solution.operations.monitoring && solution.operations.monitoring.length > 0 && (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                <p className="text-white/40 text-xs uppercase tracking-wider mb-2">📟 How you&apos;ll know it&apos;s working</p>
+                <ul className="space-y-1.5">
+                  {solution.operations.monitoring.map((m, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-white/60"><CheckCircle2 className="w-4 h-4 text-emerald-400/70 shrink-0 mt-0.5" /><span>{m}</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {solution.operations.scalability && (
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                <p className="text-white/40 text-xs uppercase tracking-wider mb-2">📈 What happens at 10x scale</p>
+                <p className="text-sm text-white/60">{solution.operations.scalability}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Team & skills — the first real user question: who builds this? */}
         {solution.teamRequired && solution.teamRequired.length > 0 && (
           <div data-team className="mb-12">
             <h2 className="text-xl font-semibold mb-1">Team & Skills Required</h2>
-            <p className="text-white/40 text-sm mb-4">Who you need to implement this — judged against your team&apos;s technical level.</p>
+            <p className="text-white/40 text-sm mb-4">Who you need to build this — and who keeps it running after go-live.</p>
+            {solution.staffingSummary && (
+              <div data-staffing-summary className="flex flex-wrap gap-2 mb-4">
+                <span className="text-xs bg-blue-500/10 border border-blue-500/30 rounded-full px-3 py-1.5 text-blue-300 font-medium">
+                  🔨 Build: {solution.staffingSummary.buildFte}
+                </span>
+                {solution.staffingSummary.runFte && (
+                  <span className="text-xs bg-emerald-500/10 border border-emerald-500/30 rounded-full px-3 py-1.5 text-emerald-300 font-medium">
+                    ⚙️ Run: {solution.staffingSummary.runFte}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {solution.teamRequired.map((r, i) => (
                 <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
@@ -1193,6 +1252,30 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                       {remixing === "swap:the currently chosen tools it lost to" ? "Rebuilding…" : `Try ${c.name} instead →`}
                     </button>
                   )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Case studies — real orgs that solved this; only grounded, sourced
+            examples survive the normalizer, so this section self-hides when
+            the research produced nothing usable. */}
+        {solution.caseStudies && solution.caseStudies.length > 0 && (
+          <div data-casestudies className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Who Else Has Done This</h2>
+            <p className="text-white/40 text-sm mb-4">Real implementations from the research — what they did, what happened, and what to steal.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {solution.caseStudies.map((cs, i) => (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-white text-sm">{cs.org}</span>
+                    <SourcePill url={cs.sourceUrl} />
+                  </div>
+                  <p className="text-white/55 text-xs"><span className="text-white/35 uppercase tracking-wider text-[10px]">Problem</span><br />{cs.problem}</p>
+                  <p className="text-white/55 text-xs"><span className="text-white/35 uppercase tracking-wider text-[10px]">Approach</span><br />{cs.approach}</p>
+                  <p className="text-emerald-300/80 text-xs"><span className="text-white/35 uppercase tracking-wider text-[10px]">Outcome</span><br />{cs.outcome}</p>
+                  <p className="text-blue-300/80 text-xs mt-auto border-t border-white/10 pt-2"><span className="text-white/35 uppercase tracking-wider text-[10px]">Lesson for you</span><br />{cs.lesson}</p>
                 </div>
               ))}
             </div>
