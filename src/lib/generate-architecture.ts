@@ -42,10 +42,16 @@ export function hasArchitectureData(solution: any): boolean {
   return hasEnv || hasFlow;
 }
 
-// Best-effort $ figure for a tool from the TCO line items (substring match on
-// name) — reuses cost data the report already has instead of asking twice.
+// Best-effort $ figure for a tool from the TCO line items — reuses cost data
+// the report already has instead of asking twice. Requires the line item to
+// contain the FULL tool name: a first-word match wrongly attributed "Azure
+// Data Factory data movement" costs to "Azure Synapse" (both start "Azure"),
+// caught in the E2E run. No match on the full name = no cost badge, which is
+// honest — a replaced/retired tool usually has no line item at all.
 function costFor(name: string, lineItems: any[]): string | undefined {
-  const hit = (lineItems || []).find((li) => String(li?.item ?? "").toLowerCase().includes(name.toLowerCase().split(" ")[0]));
+  const n = name.toLowerCase().trim();
+  if (n.length < 4) return undefined;
+  const hit = (lineItems || []).find((li) => String(li?.item ?? "").toLowerCase().includes(n));
   return hit?.cost ? clip(hit.cost, 16) : undefined;
 }
 
