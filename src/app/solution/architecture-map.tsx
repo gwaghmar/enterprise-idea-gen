@@ -2,19 +2,22 @@
 
 import { useMemo, useState } from "react";
 import { Copy, FileDown, Check } from "lucide-react";
-import BigFlowChart from "@/components/BigFlowChart";
+import ArchDiagram from "@/components/ArchDiagram";
+import { buildArchModel } from "@/lib/arch-stages";
 import { buildArchitectureFlow } from "@/lib/generate-architecture";
 import { flowToMermaid } from "@/lib/generate-flow";
 
-// System Architecture — a different question from the journey map: not
-// "who does what, when" but "how do the systems actually connect, where are
-// the cloud boundaries, and what's existing vs new vs being replaced."
-// Same ReactFlow renderer as the journey map (BigFlowChart) for visual
-// consistency; groups here are cloud/environment boundaries instead of
-// rollout phases.
+// System Architecture — pipeline-lane rendering (Sources → Ingestion →
+// Platform → Consumers) with ELK layered layout, product logos, status/
+// sensitivity badges, environment tint zones and a security band.
+// The Mermaid export still comes from the environment-grouped builder,
+// which suits Mermaid's subgraph model better than lanes do.
 export default function ArchitectureMap({ solution }: { solution: any }) {
-  const flow = useMemo(() => buildArchitectureFlow(solution), [solution]);
-  const mermaidCode = useMemo(() => flowToMermaid(flow.nodes, flow.edges, flow.groups), [flow]);
+  const model = useMemo(() => buildArchModel(solution), [solution]);
+  const mermaidCode = useMemo(() => {
+    const flow = buildArchitectureFlow(solution);
+    return flowToMermaid(flow.nodes, flow.edges, flow.groups);
+  }, [solution]);
   const [copied, setCopied] = useState(false);
 
   function copyCode() {
@@ -37,7 +40,7 @@ export default function ArchitectureMap({ solution }: { solution: any }) {
     <div data-architecture-map>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <p className="text-white/40 text-xs">
-          Systems, connections, cloud boundaries, and what&apos;s existing vs new vs replaced. 🔒 marks where sensitive data lives.
+          How data moves: sources → ingestion → platform → consumers. Cloud zones tinted; 🔒 marks where sensitive data lives.
         </p>
         <div className="flex gap-2">
           <button onClick={copyCode}
@@ -51,10 +54,7 @@ export default function ArchitectureMap({ solution }: { solution: any }) {
           </button>
         </div>
       </div>
-      <BigFlowChart nodes={flow.nodes} edges={flow.edges} groups={flow.groups} minimap={false} />
-      <p className="text-white/25 text-[11px] mt-2 flex flex-wrap gap-x-3">
-        <span>🆕 New</span><span>🔹 Existing</span><span>🗑️ Being replaced</span><span>🛡️ Security control</span>
-      </p>
+      <ArchDiagram model={model} />
     </div>
   );
 }
