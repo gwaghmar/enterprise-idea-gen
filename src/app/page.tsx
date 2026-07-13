@@ -616,7 +616,8 @@ export default function Home() {
   function notifyIfHidden(title: string, body: string) {
     try {
       if (!document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;
-      const n = new Notification(title, { body, icon: "/favicon.ico" });
+      // /icon is the generated brand favicon — there is no favicon.ico file
+      const n = new Notification(title, { body, icon: "/icon" });
       n.onclick = () => { window.focus(); n.close(); };
     } catch { /* notifications unavailable */ }
   }
