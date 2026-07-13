@@ -37,9 +37,10 @@ function SourcePill({ url, urls, quote }: { url?: string; urls?: string[]; quote
         type="button"
         onClick={() => setOpen((o) => !o)}
         title={all.length > 1 ? `${all.length} sources — click to view` : "View source"}
-        className={`inline-flex items-center gap-1 rounded-full pl-2 pr-2 py-0.5 text-[10px] border transition-colors ${open ? "bg-white/15 border-white/30 text-white/80" : "bg-white/[0.06] border-white/10 text-white/45 hover:text-white/80 hover:border-white/25"}`}
+        className={`inline-flex items-center gap-1 rounded-full pl-2 pr-2 py-0.5 text-[10px] border cursor-pointer transition-colors ${open ? "bg-blue-500/25 border-blue-400/60 text-blue-200" : "bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20 hover:border-blue-400/60 hover:text-blue-200"}`}
       >
         Source{all.length > 1 ? `s · ${all.length}` : ""}
+        <span aria-hidden className="text-[8px] leading-none">{open ? "▴" : "▾"}</span>
       </button>
       {open && (
         <>
@@ -1175,7 +1176,12 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
               {solution.teamRequired.map((r, i) => (
                 <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
                   <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <span className="font-semibold text-white text-sm">{(r.count ?? 1) > 1 ? `${r.count}× ` : ""}{r.role}</span>
+                    <span className="font-semibold text-white text-sm inline-flex items-center gap-2 flex-wrap">
+                      {r.role}
+                      <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 border whitespace-nowrap ${(r.count ?? 1) > 1 ? "bg-blue-500/15 border-blue-500/40 text-blue-300" : "bg-white/[0.06] border-white/15 text-white/55"}`}>
+                        {r.count ?? 1} {(r.count ?? 1) > 1 ? "people" : "person"}
+                      </span>
+                    </span>
                     <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 ${
                       r.staffing === "contractor" ? "border-amber-500/40 text-amber-400/90"
                       : r.staffing === "upskill" ? "border-blue-500/40 text-blue-400/90"
@@ -1226,8 +1232,20 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
             <h2 className="text-xl font-semibold mb-1">Solutions Evaluated</h2>
             <p className="text-white/40 text-sm mb-4">{solution.evaluated.length} real candidates assessed against your stack, budget, and team — here&apos;s why each won or lost.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {solution.evaluated.map((c, i) => (
-                <div key={i} className={`rounded-xl border px-4 py-3 ${c.verdict === "chosen" ? "border-blue-500/30 bg-blue-500/5" : "border-white/10 bg-white/3"}`}>
+              {solution.evaluated.map((c, i) => {
+                const swappable = c.verdict !== "chosen";
+                const doSwap = () => handleSwap("the currently chosen tools it lost to", `Use ${c.name} as the primary solution instead`);
+                return (
+                // The whole rejected card is the click target — border lifts and
+                // the arrow slides on hover so it reads as clickable, not static
+                <div key={i}
+                  role={swappable ? "button" : undefined}
+                  tabIndex={swappable ? 0 : undefined}
+                  onClick={swappable && !remixing ? doSwap : undefined}
+                  onKeyDown={swappable && !remixing ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); doSwap(); } } : undefined}
+                  className={`group rounded-xl border px-4 py-3 transition-all ${c.verdict === "chosen"
+                    ? "border-blue-500/30 bg-blue-500/5"
+                    : "border-white/10 bg-white/3 cursor-pointer hover:border-blue-400/50 hover:bg-white/[0.06] focus-visible:border-blue-400/60 focus-visible:outline-none"}`}>
                   <div className="flex items-center gap-2 mb-0.5">
                     {c.verdict === "chosen"
                       ? <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
@@ -1236,15 +1254,16 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                     <span className={`ml-auto text-[10px] uppercase tracking-wider ${c.verdict === "chosen" ? "text-blue-400" : "text-white/30"}`}>{c.verdict}</span>
                   </div>
                   <p className="text-white/50 text-xs">{c.reason} <SourcePill url={c.sourceUrl} /></p>
-                  {c.verdict !== "chosen" && (
-                    <button onClick={() => handleSwap("the currently chosen tools it lost to", `Use ${c.name} as the primary solution instead`)}
+                  {swappable && (
+                    <button onClick={(e) => { e.stopPropagation(); doSwap(); }}
                       disabled={!!remixing}
-                      className="mt-1.5 text-[11px] text-blue-400/80 hover:text-blue-300 disabled:opacity-40 transition-colors">
-                      {remixing === "swap:the currently chosen tools it lost to" ? "Rebuilding…" : `Try ${c.name} instead →`}
+                      className="mt-1.5 text-[11px] text-blue-400/80 group-hover:text-blue-300 disabled:opacity-40 transition-colors">
+                      {remixing === "swap:the currently chosen tools it lost to" ? "Rebuilding…" : <>Try {c.name} instead <span className="inline-block transition-transform group-hover:translate-x-0.5">→</span></>}
                     </button>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

@@ -48,10 +48,54 @@ function domainOf(url?: string): string | null {
   try { return url ? new URL(url).hostname.replace(/^www\./, "") : null; } catch { return null; }
 }
 
+// Logo = the favicon of the VENDOR's own domain. sourceUrl points at whatever
+// research page backed the claim (a blog, G2, reddit), so its favicon put the
+// wrong logo on well-known products — match the product name first and only
+// fall back to the citation domain for tools we don't recognize.
+// Order matters: more specific vendors (NetSuite, Confluent) before the
+// generic patterns that would also match them (Oracle, Kafka).
+const VENDOR_DOMAINS: [RegExp, string][] = [
+  [/netsuite/i, "netsuite.com"],
+  [/microsoft|dynamics|dataverse|synapse|power\s?bi|azure|sharepoint|\bteams\b|office|365|fabric/i, "microsoft.com"],
+  [/\baws\b|amazon|redshift|\bs3\b|glue|kinesis|athena|dynamodb|sagemaker|quicksight/i, "aws.amazon.com"],
+  [/google|bigquery|\bgcp\b|looker|firebase|dataflow/i, "cloud.google.com"],
+  [/snowflake/i, "snowflake.com"],
+  [/databricks/i, "databricks.com"],
+  [/cognos|\bibm\b|watson/i, "ibm.com"],
+  [/salesforce/i, "salesforce.com"],
+  [/tableau/i, "tableau.com"],
+  [/\bsap\b|ariba/i, "sap.com"],
+  [/oracle/i, "oracle.com"],
+  [/workday/i, "workday.com"],
+  [/servicenow/i, "servicenow.com"],
+  [/slack/i, "slack.com"],
+  [/jira|atlassian|confluence/i, "atlassian.com"],
+  [/confluent|kafka/i, "confluent.io"],
+  [/zapier/i, "zapier.com"],
+  [/workato/i, "workato.com"],
+  [/mulesoft/i, "mulesoft.com"],
+  [/boomi/i, "boomi.com"],
+  [/fivetran/i, "fivetran.com"],
+  [/\bdbt\b/i, "getdbt.com"],
+  [/airflow/i, "airflow.apache.org"],
+  [/stripe/i, "stripe.com"],
+  [/hubspot/i, "hubspot.com"],
+  [/zendesk/i, "zendesk.com"],
+  [/okta/i, "okta.com"],
+  [/segment/i, "segment.com"],
+  [/qlik/i, "qlik.com"],
+  [/datadog/i, "datadoghq.com"],
+];
+
+function logoDomain(sys: ArchSystem): string | null {
+  for (const [re, dom] of VENDOR_DOMAINS) if (re.test(sys.name)) return dom;
+  return domainOf(sys.sourceUrl);
+}
+
 function SystemNode({ data }: { data: { sys: ArchSystem } }) {
   const s = data.sys;
   const st = STATUS[s.status] ?? STATUS.new;
-  const domain = domainOf(s.sourceUrl);
+  const domain = logoDomain(s);
   const initials = s.name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
   return (
     <div
@@ -130,8 +174,10 @@ function ArchDiagramInner({ model }: { model: ArchModel }) {
           // pipeline lane, dragging lane headers with it.
           "elk.separateConnectedComponents": "false",
           "elk.partitioning.activate": "true",
-          "elk.layered.spacing.nodeNodeBetweenLayers": "110",
-          "elk.spacing.nodeNode": "28",
+          // Edge labels ("API · nightly sync") sit in the gap between layers —
+          // 110 was too tight and the labels ran underneath adjacent nodes
+          "elk.layered.spacing.nodeNodeBetweenLayers": "180",
+          "elk.spacing.nodeNode": "36",
           "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
         },
         children: model.systems.map((s) => ({
@@ -237,10 +283,14 @@ function ArchDiagramInner({ model }: { model: ArchModel }) {
       data: { sys: sysById.get(p.id)! },
     }));
 
-    const rfEdges: Edge[] = model.links.map((l, i) => ({
+    const rfEdges: Edge[] = model.links.map((l, i) => {
+      // Cap the label so it fits the inter-layer gap instead of running
+      // underneath the neighboring nodes
+      const full = l.via + (l.note ? ` · ${l.note}` : "");
+      return {
       id: `e${i}`,
       source: l.from, target: l.to,
-      label: l.via + (l.note ? ` · ${l.note}` : ""),
+      label: full.length > 30 ? `${full.slice(0, 28)}…` : full,
       type: "smoothstep",
       pathOptions: { borderRadius: 6 },
       labelStyle: { fill: "#475569", fontSize: 9.5, fontWeight: 600 },
@@ -249,7 +299,8 @@ function ArchDiagramInner({ model }: { model: ArchModel }) {
       labelBgBorderRadius: 4,
       markerEnd: { type: MarkerType.ArrowClosed, color: "#64748B", width: 16, height: 16 },
       style: { stroke: "#94A3B8", strokeWidth: 1.6 },
-    }));
+      };
+    });
 
     return { nodes: [...zoneNodes, ...headerNodes, ...bandNodes, ...sysNodes], edges: rfEdges };
   }, [pos, model]);

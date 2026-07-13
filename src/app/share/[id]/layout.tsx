@@ -1,15 +1,9 @@
 import type { Metadata } from "next";
+import { readBlobJson } from "@/lib/blob-read";
 
 async function loadShared(id: string) {
-  try {
-    const res = await fetch(`https://blob.vercel-storage.com/solutions/${id}.json`, {
-      next: { revalidate: 3600 },
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return readBlobJson<any>(`solutions/${id}.json`);
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {

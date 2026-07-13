@@ -1,17 +1,13 @@
 import { ImageResponse } from "next/og";
+import { readBlobJson } from "@/lib/blob-read";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const alt = "PilotPlan implementation plan";
 
 async function loadShared(id: string) {
-  try {
-    const res = await fetch(`https://blob.vercel-storage.com/solutions/${id}.json`);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return readBlobJson<any>(`solutions/${id}.json`);
 }
 
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
