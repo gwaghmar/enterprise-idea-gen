@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import OpenAI from "openai";
 import { put } from "@vercel/blob";
 import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
+import { readBlobJson } from "@/lib/blob-read";
 import { normalizeSolution } from "@/lib/normalize-solution";
 import { loadLessons } from "@/lib/learning";
 import { sameOrigin, forbidden } from "@/lib/security";
@@ -24,7 +25,12 @@ interface Ckpt {
 const encoder = new TextEncoder();
 
 function send(controller: ReadableStreamDefaultController, data: object) {
-  controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+  // The client can disconnect mid-run (tab closed, network drop) — enqueue then
+  // throws. Swallow it so the pipeline keeps going and still saves checkpoints
+  // the retry can resume from.
+  try {
+    controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+  } catch { /* client gone */ }
 }
 
 // Parallel Jina fetch — 5s timeout, 4500 chars per source
@@ -135,14 +141,8 @@ export async function POST(req: NextRequest) {
   };
   const loadCkpt = async (): Promise<Ckpt | null> => {
     if (!ckptPath) return null;
-    try {
-      const r = await fetch(`https://blob.vercel-storage.com/${ckptPath}`, { cache: "no-store" });
-      if (!r.ok) return null;
-      const c = await r.json();
-      return c && typeof c.stage === "string" && typeof c.refinedProblem === "string" ? c : null;
-    } catch {
-      return null;
-    }
+    const c = await readBlobJson<Ckpt>(ckptPath);
+    return c && typeof c.stage === "string" && typeof c.refinedProblem === "string" ? c : null;
   };
 
   const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
@@ -157,6 +157,14 @@ export async function POST(req: NextRequest) {
         activityLog.push(entry);
         send(controller, { activity: entry });
       };
+      // First bytes must leave BEFORE any await: proxies/compression layers and
+      // WebKit hold small streamed responses back until enough data arrives
+      // (Safari buffers the first 1KB), which showed up as the progress screen
+      // frozen at "Starting..." while the whole run completed server-side. The
+      // 2KB SSE comment forces every buffering layer past its threshold, and
+      // the first real event gives the UI an immediate heartbeat.
+      controller.enqueue(encoder.encode(`: ${"p".repeat(2048)}\n\n`));
+      send(controller, { progress: 1, step: 1, message: "Starting..." });
       try {
         const tStart = Date.now();
         // Resume? Restore whatever a previous run of this runId already finished
@@ -670,15 +678,20 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           // Resumed with a finished draft — skip the 2-minute write entirely
           send(controller, { progress: 92, step: 4, message: "Recovered your draft — finalizing..." });
         } else {
+          // 8000 max_tokens truncated real reports mid-array (~30k chars ≈ 7.5k
+          // tokens hit the cap), forcing a 60s+ JSON repair pass on every run —
+          // give the report room to finish naturally.
           const synthesisStream = await openrouter.chat.completions.create({
             model: "google/gemini-2.5-flash",
             stream: true,
-            max_tokens: 8000,
+            max_tokens: 20000,
             messages: [{ role: "user", content: synthesisPrompt }],
             temperature: 0.3,
           });
 
+          let finishReason: string | null = null;
           for await (const chunk of synthesisStream) {
+            finishReason = chunk.choices[0]?.finish_reason ?? finishReason;
             const delta = chunk.choices[0]?.delta?.content || "";
             fullContent += delta;
             tokenCount++;
@@ -702,10 +715,15 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
             }
           }
 
+          if (finishReason && finishReason !== "stop") {
+            // "length" here means the report was cut off at max_tokens and the
+            // JSON parse below is guaranteed to fail — worth its own log line.
+            console.error(JSON.stringify({ reqId, step: "synthesis_finish_abnormal", finishReason, contentLen: fullContent.length }));
+          }
           await saveCkpt({ stage: "synthesis", refinedProblem, searchContent, communityContent, docsContent, casesContent, sourceContent, citations, sourceMeta, fullContent });
         }
 
-        log(reqId, "claude_done", { ms: Date.now() - t3, tokens: tokenCount, contentLen: fullContent.length });
+        log(reqId, "claude_done", { ms: Date.now() - t3, chunks: tokenCount, contentLen: fullContent.length });
         send(controller, { progress: 96, step: 4, message: "Assembling your report..." });
 
         // Claude returns clean JSON — no <think> tags to strip
@@ -800,7 +818,9 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
         // exact shape the UI and PDF expect
         solution = normalizeSolution(solution);
 
-        const totalTokens = searchUsageTokens + tokenCount;
+        // tokenCount counts stream CHUNKS, not tokens (Gemini sends multi-
+        // hundred-token deltas) — estimate synthesis tokens from length instead
+        const totalTokens = searchUsageTokens + Math.round(fullContent.length / 4);
         act({ type: "done", text: "Solution assembled and ready" });
         log(reqId, "complete", { totalTokens, totalMs: Date.now() - tStart });
 
@@ -829,6 +849,14 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
   });
 
   return new Response(stream, {
-    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+    headers: {
+      "Content-Type": "text/event-stream",
+      // no-transform stops CDN/proxy compression from buffering the stream;
+      // X-Accel-Buffering disables proxy response buffering. Without these the
+      // whole SSE stream can arrive in one lump when the function finishes.
+      // (No Connection header — it's a hop-by-hop header, forbidden in HTTP/2.)
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+    },
   });
 }

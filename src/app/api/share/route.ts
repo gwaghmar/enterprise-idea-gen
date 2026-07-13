@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
+import { readBlobJson } from "@/lib/blob-read";
 import { sameOrigin, forbidden } from "@/lib/security";
 import { rateLimit, clientIp, tooMany } from "@/lib/ratelimit";
 
@@ -30,12 +31,7 @@ export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-  try {
-    const res = await fetch(`https://blob.vercel-storage.com/solutions/${id}.json`);
-    if (!res.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const data = await res.json();
-    return NextResponse.json(data);
-  } catch {
-    return NextResponse.json({ error: "Failed to load" }, { status: 500 });
-  }
+  const data = await readBlobJson(`solutions/${id}.json`);
+  if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json(data);
 }

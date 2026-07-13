@@ -1,5 +1,6 @@
 import { put, list } from "@vercel/blob";
 import OpenAI from "openai";
+import { readBlobJson } from "@/lib/blob-read";
 
 // The learning loop, v2.
 //
@@ -159,13 +160,8 @@ export function mergeLessons(
 let cache: { store: LessonStore | null; at: number } = { store: null, at: 0 };
 
 async function fetchStore(): Promise<LessonStore | null> {
-  try {
-    const r = await fetch(`https://blob.vercel-storage.com/${LESSONS_PATH}`, { cache: "no-store" });
-    if (!r.ok) return null;
-    return migrateStore(await r.json(), new Date().toISOString());
-  } catch {
-    return null;
-  }
+  const raw = await readBlobJson(LESSONS_PATH);
+  return raw ? migrateStore(raw, new Date().toISOString()) : null;
 }
 
 export async function loadLessons(ctx: LessonContext = {}): Promise<string[]> {

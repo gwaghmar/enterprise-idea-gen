@@ -178,7 +178,8 @@ function BigFlowChartInner({ nodes, edges, groups, minimap = true }: Props) {
     >
       <Background color="#E0E0E0" gap={20} variant={BackgroundVariant.Dots} style={{ background: "#FFFFFF" }} />
       <Controls style={{ background: "#fff", border: "1px solid #E0E0E0", boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }} />
-      {minimap && <MiniMap style={{ background: "#fff", border: "1px solid #E0E0E0" }} nodeColor={() => "#93C5FD"} maskColor="rgba(240,240,240,0.6)" />}
+      {/* Smaller + translucent so it stops hiding the nodes it overlaps */}
+      {minimap && <MiniMap pannable style={{ background: "rgba(255,255,255,0.72)", border: "1px solid #E0E0E0", width: 150, height: 92 }} nodeColor={() => "#93C5FD"} maskColor="rgba(226,232,240,0.45)" />}
     </ReactFlow>
   );
 }
