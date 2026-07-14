@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import Dagre from "@dagrejs/dagre";
+import { deriveAdrs } from "@/lib/derive-adrs";
 
 interface FlowNode { id: string; label: string; type: string; }
 interface FlowEdge { from: string; to: string; label?: string; }
@@ -32,6 +33,7 @@ interface Solution {
   beforeYouStart?: string[];
   dataFlow?: { from: string; to: string; via: string; note?: string }[];
   requirements?: { functional?: string[]; nonFunctional?: { type: string; requirement: string; source: string }[] };
+  stakeholderMap?: { group: string; role: string; count?: string; caresAbout?: string; involvement?: string }[];
   testStrategy?: { kind: string; what: string; who?: string; pass: string; phase?: string }[];
   cutover?: { approach: string; coexistence?: string; rollback?: string; downtime?: string };
   reliability?: { availabilityTarget?: string; rtoRpo?: { rto: string; rpo?: string; basis?: string }; failureModes?: { failure: string; impact?: string; handling: string }[]; backup?: string };
@@ -903,6 +905,41 @@ export async function generatePDF(
         y += 1;
       });
       y += 5;
+    }
+
+    // Stakeholder map — everyone the rollout touches
+    if (solution.stakeholderMap && solution.stakeholderMap.length > 0) {
+      roomCost(28);
+      y = sectionLabel(doc, "Who's Involved", y);
+      solution.stakeholderMap.forEach((m) => {
+        roomCost(12);
+        y = wrapText(doc, `- ${m.group}${m.count ? ` (${m.count})` : ""} — ${m.role}${m.caresAbout ? `: ${m.caresAbout}` : ""}`, ML + 2, y, CW - 4, 7.8, C.dark, "normal");
+        if (m.involvement) y = wrapText(doc, m.involvement, ML + 6, y, CW - 10, 7.3, C.light, "normal");
+        y += 1;
+      });
+      y += 5;
+    }
+
+    // Decision record — derived from the evaluated verdicts, zero AI cost
+    const adrs = deriveAdrs(solution);
+    if (adrs.length > 0) {
+      roomCost(32);
+      y = sectionLabel(doc, "Decision Record (ADR)", y);
+      adrs.forEach((a) => {
+        roomCost(24);
+        y = wrapText(doc, `Decision: Adopt ${a.decision}`, ML, y, CW, 8.5, C.dark, "bold");
+        y = wrapText(doc, `Context: ${a.context}`, ML + 2, y + 0.5, CW - 4, 7.5, C.mid, "normal");
+        a.alternatives.forEach((alt) => {
+          roomCost(10);
+          y = wrapText(doc, `Rejected — ${alt.name}: ${alt.reason}`, ML + 4, y + 0.5, CW - 8, 7.3, C.light, "normal");
+        });
+        a.consequences.forEach((cq) => {
+          roomCost(10);
+          y = wrapText(doc, `Consequence: ${cq}`, ML + 4, y + 0.5, CW - 8, 7.3, [180, 83, 9], "normal");
+        });
+        y += 3;
+      });
+      y += 3;
     }
 
     // Reliability & recovery
