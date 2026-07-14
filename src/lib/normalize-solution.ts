@@ -126,7 +126,9 @@ export function normalizeSolution(raw: any): any {
     evaluated: arr(s.evaluated).map((c: any) => ({
       name: str(c?.name, 80),
       verdict: verdictOf(c?.verdict),
-      reason: str(c?.reason, 300),
+      // 500 not 300: the card back shows the FULL verdict — 300 cut real
+      // reasons mid-word ("...capabilities are superior fo")
+      reason: str(c?.reason, 500),
       sourceUrl: httpUrl(c?.sourceUrl),
     })).filter((c: any) => c.name && c.reason).slice(0, 10),
     teamRequired: arr(s.teamRequired).map((r: any) => ({
