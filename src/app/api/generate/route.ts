@@ -158,13 +158,19 @@ export async function POST(req: NextRequest) {
         send(controller, { activity: entry });
       };
       // First bytes must leave BEFORE any await: proxies/compression layers and
-      // WebKit hold small streamed responses back until enough data arrives
-      // (Safari buffers the first 1KB), which showed up as the progress screen
-      // frozen at "Starting..." while the whole run completed server-side. The
-      // 2KB SSE comment forces every buffering layer past its threshold, and
+      // WebKit hold small streamed responses back until enough data arrives,
+      // which showed up as the progress screen frozen at "Starting..." while
+      // the whole run completed server-side. The 8KB SSE comment forces every
+      // buffering layer past its threshold (some proxies hold up to 8KB), and
       // the first real event gives the UI an immediate heartbeat.
-      controller.enqueue(encoder.encode(`: ${"p".repeat(2048)}\n\n`));
+      controller.enqueue(encoder.encode(`: ${"p".repeat(8192)}\n\n`));
       send(controller, { progress: 1, step: 1, message: "Starting..." });
+      // Continuous flush pressure: buffering layers release chunks when bytes
+      // keep arriving — a comment every 2.5s keeps the pipe moving through
+      // quiet stretches (model waits, the JSON repair pass).
+      const heartbeat = setInterval(() => {
+        try { controller.enqueue(encoder.encode(": hb\n\n")); } catch { clearInterval(heartbeat); }
+      }, 2500);
       try {
         const tStart = Date.now();
         // Resume? Restore whatever a previous run of this runId already finished
@@ -718,12 +724,16 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           // 8000 max_tokens truncated real reports mid-array (~30k chars ≈ 7.5k
           // tokens hit the cap), forcing a 60s+ JSON repair pass on every run —
           // give the report room to finish naturally.
+          // Native JSON mode: constrained decoding can't emit malformed JSON,
+          // which was costing a 40-60s Haiku repair pass on real runs (the
+          // repair fallback below stays as the safety net regardless)
           const synthesisStream = await openrouter.chat.completions.create({
             model: "google/gemini-2.5-flash",
             stream: true,
             max_tokens: 20000,
             messages: [{ role: "user", content: synthesisPrompt }],
             temperature: 0.3,
+            response_format: { type: "json_object" },
           });
 
           let finishReason: string | null = null;
@@ -880,7 +890,9 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
       } catch (err) {
         console.error(JSON.stringify({ reqId, step: "unhandled_error", error: err instanceof Error ? err.message : String(err) }));
         send(controller, { progress: 100, done: true, error: err instanceof Error ? err.message : "Unknown error" });
-        controller.close();
+        try { controller.close(); } catch { /* already closed */ }
+      } finally {
+        clearInterval(heartbeat);
       }
     },
   });
