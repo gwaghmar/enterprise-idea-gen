@@ -445,6 +445,7 @@ ${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${prefe
 - caseStudies: 2-3 real implementation examples taken ONLY from the case-study research above — if the research names the company, use it; otherwise describe the org honestly ("mid-size US insurer") — each MUST carry the sourceUrl it came from. If the research contains no usable real examples, OMIT the caseStudies field entirely; never invent one
 - beforeYouStart: the decisions/gaps to settle before day 1 — unresolved conditionals from the problem statement (e.g. an undecided cloud migration), prerequisites, and anything you deliberately cut from scope
 - requirements: the catalog of what the solution must do — 3-6 functional and 3-5 non-functional entries. Every non-functional entry carries "source": "stated" (the user actually said it) or "inferred" (your professional assumption they should verify) — never pass an inference off as stated
+- stakeholderMap: 4-7 groups covering EVERYONE the rollout touches — the END USERS doing daily work in it (lead with them; estimate count from seats/team when inferable), the admin who runs it, the business owner, and support — not just the approvers (those live in rolloutPlaybook). "caresAbout" is what THEY get or fear, in their words, not the project's
 - testStrategy: 3-5 validation steps proving the solution works before full rollout, each with a MEASURABLE pass condition and a named owner. Scale rigor honestly to the team (${techLevel}) and company size — a no-code startup gets a spreadsheet-checkable UAT, not an enterprise QA program
 - cutover: how the switch from the old process/system actually happens — approach (parallel run / phased / big bang) with why it fits this company, the coexistence period, a CONCRETE rollback (what gets disabled, what the fallback process is, the data-loss exposure), and expected downtime
 - reliability: ground availabilityTarget in the business need (match the vendor SLA tier being bought — never a generic "five nines"), rtoRpo with the business basis for those numbers, 2-4 realistic failure modes with concrete handling, and where backups actually live — for SaaS tools backup is usually the vendor's responsibility, so flag verifying it in the DPA
@@ -493,6 +494,9 @@ Return ONLY valid JSON, no markdown, no explanation:
       { "type": "One of: Performance | Availability | Security | Compliance | Usability | Scalability", "requirement": "Measurable where possible — e.g. 'Sub-second dashboard queries at stated event volume'", "source": "stated (the user said it) or inferred (your assumption — they should verify)" }
     ]
   },
+  "stakeholderMap": [
+    { "group": "Who they are — e.g. AP clerks", "role": "One of: end user | admin | business owner | approver | support", "count": "How many, if inferable — e.g. ~8 — or omit", "caresAbout": "What they get or fear, in their words — e.g. 'less manual keying'", "involvement": "When/how they're involved — e.g. 'UAT in Phase 2, training at go-live'" }
+  ],
   "costOfInaction": {
     "annualCost": "What NOT solving this costs per year, grounded in the numbers in the problem statement — e.g. '~$180,000/year' — omit the whole costOfInaction object if you cannot ground this in a real number from the problem",
     "basis": "One line showing the math — e.g. '15 hrs/week manual work x loaded analyst cost + ~8% error rate delaying month-end close'",
@@ -677,6 +681,7 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           { key: "evaluated", narr: "Evaluating candidate solutions against your scenario" },
           { key: "summary" },
           { key: "requirements", narr: "Cataloging functional & non-functional requirements" },
+          { key: "stakeholderMap", narr: "Mapping stakeholders & end users" },
           { key: "costOfInaction", narr: "Pricing what doing nothing costs" },
           { key: "tools", narr: "Selecting the tool stack" },
           { key: "phases", narr: "Building the implementation phases" },

@@ -184,6 +184,17 @@ export function normalizeSolution(raw: any): any {
       })).filter((n: any) => n.requirement).slice(0, 6);
       return functional.length || nonFunctional.length ? { functional, nonFunctional } : undefined;
     })(),
+    stakeholderMap: arr(s.stakeholderMap).map((m: any) => {
+      const role = str(m?.role, 30).toLowerCase();
+      return {
+        group: str(m?.group, 80),
+        role: /admin/.test(role) ? "admin" : /owner/.test(role) ? "business owner"
+          : /approv/.test(role) ? "approver" : /support/.test(role) ? "support" : "end user",
+        count: str(m?.count, 20) || undefined,
+        caresAbout: str(m?.caresAbout, 200) || undefined,
+        involvement: str(m?.involvement, 200) || undefined,
+      };
+    }).filter((m: any) => m.group).slice(0, 8),
     testStrategy: arr(s.testStrategy).map((t: any) => ({
       kind: str(t?.kind, 30) || "Validation",
       what: str(t?.what, 250),

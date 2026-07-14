@@ -15,6 +15,7 @@ import JourneyMap from "./journey-map";
 import ArchitectureMap from "./architecture-map";
 import { hasArchitectureData } from "@/lib/generate-architecture";
 import { rollupForRole } from "@/lib/role-rollup";
+import { deriveAdrs } from "@/lib/derive-adrs";
 
 // Citations/activity URLs come from external sources — only render links for
 // http(s) URLs so a crafted share payload can't smuggle javascript: links
@@ -193,6 +194,7 @@ interface TestStep { kind: string; what: string; who?: string; pass: string; pha
 interface Cutover { approach: string; coexistence?: string; rollback?: string; downtime?: string; }
 interface FailureMode { failure: string; impact?: string; handling: string; }
 interface Reliability { availabilityTarget?: string; rtoRpo?: { rto: string; rpo?: string; basis?: string }; failureModes?: FailureMode[]; backup?: string; }
+interface StakeholderGroup { group: string; role: string; count?: string; caresAbout?: string; involvement?: string; }
 interface Solution {
   title: string; insight?: string; insightSourceUrl?: string; insightSourceUrls?: string[]; insightSourceQuote?: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
@@ -209,6 +211,7 @@ interface Solution {
   testStrategy?: TestStep[];
   cutover?: Cutover;
   reliability?: Reliability;
+  stakeholderMap?: StakeholderGroup[];
 }
 interface Context {
   size: string; stack: string; budget: string; timeline: string;
@@ -1079,6 +1082,34 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
           </div>
         )}
 
+        {/* Stakeholder map — everyone the rollout touches, end users first */}
+        {solution.stakeholderMap && solution.stakeholderMap.length > 0 && (
+          <div data-stakeholders className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Who&apos;s Involved</h2>
+            <p className="text-white/40 text-sm mb-4">Everyone this rollout touches — what each group gets, and when they come in.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {solution.stakeholderMap.map((m, i) => {
+                const badge = m.role === "admin" ? "bg-purple-500/10 border-purple-500/30 text-purple-300"
+                  : m.role === "business owner" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                  : m.role === "approver" ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                  : m.role === "support" ? "bg-white/[0.08] border-white/15 text-white/50"
+                  : "bg-blue-500/10 border-blue-500/30 text-blue-300";
+                return (
+                  <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                    <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                      <span className="font-semibold text-white text-sm">{m.group}</span>
+                      {m.count && <span className="text-xs text-white/40">({m.count})</span>}
+                      <span className={`ml-auto text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 ${badge}`}>{m.role}</span>
+                    </div>
+                    {m.caresAbout && <p className="text-sm text-white/60">💬 {m.caresAbout}</p>}
+                    {m.involvement && <p className="text-xs text-white/40 mt-1.5">{m.involvement}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Unlock banner — the implementation kit sits behind the $1 */}
         {!unlocked && (
           <div className="mb-12 border border-white/20 bg-gradient-to-br from-white/8 to-white/3 rounded-2xl p-6">
@@ -1360,6 +1391,49 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
             </div>
           </div>
         )}
+
+        {/* ADR cards — derived from evaluated verdicts + lock-in, zero AI cost */}
+        {(() => {
+          const adrs = deriveAdrs(solution);
+          if (adrs.length === 0) return null;
+          return (
+            <div data-adrs className="mb-12">
+              <h2 className="text-xl font-semibold mb-1">Decision Record</h2>
+              <p className="text-white/40 text-sm mb-4">The architecture decision in ADR form — paste it into your wiki so nobody relitigates this in six months.</p>
+              {adrs.map((a, i) => (
+                <div key={i} className="bg-white/3 border border-white/10 rounded-2xl p-5 mb-3">
+                  <p className="text-[10px] uppercase tracking-wider text-white/35 mb-1">Decision</p>
+                  <p className="text-white font-semibold text-sm mb-3 flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />Adopt {a.decision}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-white/35 mb-1">Context</p>
+                  <p className="text-sm text-white/60 mb-3">{a.context}</p>
+                  {a.alternatives.length > 0 && (
+                    <>
+                      <p className="text-[10px] uppercase tracking-wider text-white/35 mb-1">Alternatives considered</p>
+                      <ul className="space-y-1 mb-3">
+                        {a.alternatives.map((alt, j) => (
+                          <li key={j} className="text-sm text-white/50 flex gap-2">
+                            <span className="text-white/25 shrink-0">✕</span>
+                            <span><span className="text-white/70">{alt.name}</span> — {alt.reason}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {a.consequences.length > 0 && (
+                    <>
+                      <p className="text-[10px] uppercase tracking-wider text-white/35 mb-1">Consequences</p>
+                      <ul className="space-y-1">
+                        {a.consequences.map((cq, j) => (
+                          <li key={j} className="text-sm text-white/50 flex gap-2"><span className="text-amber-400/60 shrink-0">→</span><span>{cq}</span></li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Case studies — real orgs that solved this; only grounded, sourced
             examples survive the normalizer, so this section self-hides when
