@@ -57,15 +57,15 @@ export function generateMermaid(solution: any, problem: string, context?: { stac
   push("  classDef adopt fill:#172554,stroke:#60a5fa,color:#dbeafe");
 
   // ── TODAY: the problem + current stack ────────────────────────────────────
-  push('  subgraph TODAY["📍 TODAY — Where you are"]');
-  push(`    P0["🔥 ${lbl(problem, 80)}"]:::problem`);
+  push('  subgraph TODAY["TODAY — Where you are"]');
+  push(`    P0["Problem: ${lbl(problem, 80)}"]:::problem`);
   const stack = String(context?.stack ?? "").split(",").map((s) => s.trim()).filter((s) => s && !/recommend for me/i.test(s)).slice(0, 6);
   if (stack.length) {
-    push(`    ST["🖥 Current stack: ${lbl(stack.join(" · "), 70)}"]:::stack`);
+    push(`    ST["Current stack: ${lbl(stack.join(" · "), 70)}"]:::stack`);
     push("    P0 --- ST");
   }
   if (solution?.costOfInaction?.annualCost) {
-    push(`    CI["💸 Cost of doing nothing: ${lbl(solution.costOfInaction.annualCost, 30)}/yr"]:::risk`);
+    push(`    CI["Cost of doing nothing: ${lbl(solution.costOfInaction.annualCost, 30)}/yr"]:::risk`);
     push("    P0 --- CI");
   }
   push("  end");
@@ -73,7 +73,7 @@ export function generateMermaid(solution: any, problem: string, context?: { stac
   // ── NEW TOOLS: the architecture being added ───────────────────────────────
   const tools: any[] = (solution?.tools ?? []).slice(0, 8);
   if (tools.length) {
-    push('  subgraph TOOLS["🧰 NEW TOOLS — What gets added"]');
+    push('  subgraph TOOLS["NEW TOOLS — What gets added"]');
     tools.forEach((t, i) => {
       push(`    T${i}["${lbl(t.name, 30)}<br/><i>${lbl(t.category, 20)} — ${lbl(t.purpose, 40)}</i>"]:::tool`);
     });
@@ -87,8 +87,8 @@ export function generateMermaid(solution: any, problem: string, context?: { stac
   let prevBlock = tools.length ? "TOOLS" : "TODAY";
   phases.forEach((ph, pi) => {
     const owners = ownersFor(pi, String(ph.title ?? ""), team);
-    push(`  subgraph PH${pi}["🚀 ${lbl(ph.title, 50)}"]`);
-    if (ph.objective) push(`    PH${pi}O["🎯 ${lbl(ph.objective, 60)}"]:::action`);
+    push(`  subgraph PH${pi}["${lbl(ph.title, 50)}"]`);
+    if (ph.objective) push(`    PH${pi}O["Goal: ${lbl(ph.objective, 60)}"]:::action`);
     const actions: string[] = (ph.actions ?? []).slice(0, 5);
     actions.forEach((a: string, ai: number) => {
       push(`    PH${pi}A${ai}["${lbl(a, 60)}"]:::action`);
@@ -97,7 +97,7 @@ export function generateMermaid(solution: any, problem: string, context?: { stac
     });
     const exit: string[] = (ph.exitCriteria ?? []).slice(0, 3);
     if (exit.length && actions.length) {
-      push(`    PH${pi}G{"✅ Done when:<br/>${exit.map((e) => lbl(e, 45)).join("<br/>")}"}:::gate`);
+      push(`    PH${pi}G{"Done when:<br/>${exit.map((e) => lbl(e, 45)).join("<br/>")}"}:::gate`);
       push(`    PH${pi}A${actions.length - 1} --> PH${pi}G`);
     }
     push("  end");
@@ -106,7 +106,7 @@ export function generateMermaid(solution: any, problem: string, context?: { stac
     // Team lanes: who staffs this phase (dashed)
     owners.slice(0, 3).forEach((o) => {
       const tid = `TM${o.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16)}`;
-      push(`  ${tid}(["👤 ${lbl(o, 28)}"]):::team`);
+      push(`  ${tid}(["${lbl(o, 28)}"]):::team`);
       push(`  ${tid} -.-> PH${pi}`);
     });
   });
@@ -114,7 +114,7 @@ export function generateMermaid(solution: any, problem: string, context?: { stac
   // ── ADOPTION: change management ───────────────────────────────────────────
   const adoption: any[] = (solution?.adoptionPlan ?? []).slice(0, 4);
   if (adoption.length) {
-    push('  subgraph ADOPT["🤝 ADOPTION — Making it stick"]');
+    push('  subgraph ADOPT["ADOPTION — Making it stick"]');
     adoption.forEach((a, i) => push(`    AD${i}["${lbl(a.title, 45)}"]:::adopt`));
     push("  end");
     push(`  ${prevBlock} --> ADOPT`);
@@ -123,14 +123,14 @@ export function generateMermaid(solution: any, problem: string, context?: { stac
 
   // ── OUTCOMES: KPIs baseline → target ──────────────────────────────────────
   const kpis: any[] = (solution?.kpis ?? []).slice(0, 5);
-  push('  subgraph WIN["🏁 OUTCOMES — Where you end up"]');
+  push('  subgraph WIN["OUTCOMES — Where you end up"]');
   if (kpis.length) {
     kpis.forEach((k, i) => {
       const from = k.baseline ? `${lbl(k.baseline, 15)} → ` : "";
-      push(`    K${i}["📈 ${lbl(k.metric, 45)}<br/><b>${from}${lbl(k.target, 20)}</b>"]:::outcome`);
+      push(`    K${i}["${lbl(k.metric, 45)}<br/><b>${from}${lbl(k.target, 20)}</b>"]:::outcome`);
     });
   } else {
-    push(`    K0["📈 ${lbl(solution?.summary, 80)}"]:::outcome`);
+    push(`    K0["${lbl(solution?.summary, 80)}"]:::outcome`);
   }
   push("  end");
   push(`  ${prevBlock} --> WIN`);
@@ -139,14 +139,14 @@ export function generateMermaid(solution: any, problem: string, context?: { stac
   const firstYear = solution?.tco?.firstYearTotal || solution?.estimatedCost;
   if (firstYear) {
     const monthly = solution?.tco?.monthlyRecurring ? ` · ${lbl(solution.tco.monthlyRecurring, 18)} recurring` : "";
-    push(`  COST["💰 INVESTMENT: ${lbl(firstYear, 20)} first year${monthly} · ${lbl(solution?.timeToImplement, 25)}"]:::cost`);
+    push(`  COST["INVESTMENT: ${lbl(firstYear, 20)} first year${monthly} · ${lbl(solution?.timeToImplement, 25)}"]:::cost`);
     push("  COST -.-> WIN");
   }
 
   // ── TOP RISKS ─────────────────────────────────────────────────────────────
   const risks: any[] = (solution?.approvals?.riskAssessment ?? []).slice(0, 3);
   if (risks.length) {
-    push('  subgraph RISKS["⚠️ WATCH OUT — Top risks"]');
+    push('  subgraph RISKS["WATCH OUT — Top risks"]');
     risks.forEach((r, i) => push(`    R${i}["${lbl(r.severity ? `[${r.severity}] ` : "", 10)}${lbl(r.risk ?? r.name ?? r, 55)}"]:::risk`));
     push("  end");
     push("  RISKS -.-> WIN");

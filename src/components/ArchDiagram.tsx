@@ -13,6 +13,7 @@ import ReactFlow, {
   ReactFlowProvider,
 } from "reactflow";
 import "reactflow/dist/style.css";
+import { Lock, Cloud, ShieldCheck } from "lucide-react";
 import type { ArchModel, ArchSystem } from "@/lib/arch-stages";
 import { LANES } from "@/lib/arch-stages";
 
@@ -140,7 +141,8 @@ function SystemNode({ data }: { data: { sys: ArchSystem } }) {
           <span style={{
             fontSize: 8, fontWeight: 700, padding: "1.5px 6px", borderRadius: 999,
             background: "#FEF3C7", color: "#92400E",
-          }}>🔒 {s.dataSensitivity}</span>
+            display: "inline-flex", alignItems: "center", gap: 3,
+          }}><Lock size={8} /> {s.dataSensitivity}</span>
         )}
         {s.cost && (
           <span style={{ fontSize: 9, color: "#64748B", fontWeight: 600 }}>{s.cost}</span>
@@ -245,7 +247,7 @@ function ArchDiagramInner({ model }: { model: ArchModel }) {
         id: `zone-${env}`,
         position: { x: b.minX, y: b.minY },
         data: { label: (
-          <div style={{ position: "absolute", top: 3, right: 10, fontSize: 9, fontWeight: 700, color: tint.text, letterSpacing: 0.5 }}>☁ {env}</div>
+          <div style={{ position: "absolute", top: 3, right: 10, fontSize: 9, fontWeight: 700, color: tint.text, letterSpacing: 0.5, display: "inline-flex", alignItems: "center", gap: 3 }}><Cloud size={9} /> {env}</div>
         ) },
         draggable: false, selectable: false,
         style: {
@@ -263,7 +265,7 @@ function ArchDiagramInner({ model }: { model: ArchModel }) {
       position: { x: allMinX, y: maxY + 34 },
       data: { label: (
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 12px" }}>
-          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: "#7E22CE" }}>🛡 SECURITY & ACCESS</span>
+          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: "#7E22CE", display: "inline-flex", alignItems: "center", gap: 4 }}><ShieldCheck size={11} /> SECURITY & ACCESS</span>
           {model.controls.map((c, i) => (
             <span key={i} style={{ fontSize: 9.5, fontWeight: 600, color: "#6B21A8", background: "#F3E8FF", border: "1px solid #D8B4FE", borderRadius: 999, padding: "2px 9px" }}>{c}</span>
           ))}
