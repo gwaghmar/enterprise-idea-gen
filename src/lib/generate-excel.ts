@@ -67,6 +67,10 @@ interface Solution {
     monthlyRecurring?: string;
     firstYearTotal?: string;
   };
+  requirements?: { functional?: string[]; nonFunctional?: { type: string; requirement: string; source: string }[] };
+  testStrategy?: { kind: string; what: string; who?: string; pass: string; phase?: string }[];
+  cutover?: { approach: string; coexistence?: string; rollback?: string; downtime?: string };
+  reliability?: { availabilityTarget?: string; rtoRpo?: { rto: string; rpo?: string; basis?: string }; failureModes?: { failure: string; impact?: string; handling: string }[]; backup?: string };
 }
 
 function money(v: string | undefined): number | string {
@@ -498,6 +502,99 @@ export async function generateExcel(solutionRaw: Solution | any, problem: string
       row.eachCell((c) => (c.border = { bottom: { style: "hair", color: { argb: GREY } } }));
       cr += 1;
     });
+  }
+
+  // ---------- Readiness (requirements, testing, cutover, reliability) ----------
+  // One sheet the delivery team can work down: what it must do, how it's
+  // proven, how the switch happens, and what the recovery plan is.
+  const reqs = solution.requirements;
+  const hasReadiness =
+    (reqs && ((reqs.functional?.length ?? 0) > 0 || (reqs.nonFunctional?.length ?? 0) > 0)) ||
+    (solution.testStrategy?.length ?? 0) > 0 || solution.cutover?.approach || solution.reliability;
+  if (hasReadiness) {
+    const rd = wb.addWorksheet("Readiness", { views: [{ showGridLines: false }] });
+    titleBlock(rd, "Delivery Readiness", "Requirements, test plan, cutover and recovery — the pre-launch checklist", 4);
+    autosize(rd, [22, 46, 34, 20]);
+    let rr = 4;
+    const sectionHdr = (label: string) => {
+      rd.getCell(rr, 1).value = label;
+      rd.getCell(rr, 1).font = { bold: true, size: 11, color: { argb: ACCENT } };
+      rr += 1;
+    };
+    if (reqs && ((reqs.functional?.length ?? 0) > 0 || (reqs.nonFunctional?.length ?? 0) > 0)) {
+      sectionHdr("REQUIREMENTS");
+      (reqs.functional ?? []).forEach((f) => {
+        rd.getCell(rr, 1).value = "Functional";
+        rd.getCell(rr, 2).value = f;
+        rd.getCell(rr, 2).alignment = { wrapText: true, vertical: "top" };
+        rr += 1;
+      });
+      (reqs.nonFunctional ?? []).forEach((n) => {
+        rd.getCell(rr, 1).value = n.type;
+        rd.getCell(rr, 2).value = n.requirement;
+        rd.getCell(rr, 2).alignment = { wrapText: true, vertical: "top" };
+        rd.getCell(rr, 3).value = n.source === "inferred" ? "Inferred — verify" : "Stated by you";
+        if (n.source === "inferred") rd.getCell(rr, 3).font = { color: { argb: "FFB45309" }, italic: true };
+        rr += 1;
+      });
+      rr += 1;
+    }
+    if (solution.testStrategy?.length) {
+      sectionHdr("TESTING & VALIDATION");
+      const hdr = rd.getRow(rr);
+      ["Kind", "Test", "Pass condition", "Owner / phase"].forEach((h, i) => (hdr.getCell(i + 1).value = h));
+      styleHeaderRow(hdr);
+      rr += 1;
+      solution.testStrategy.forEach((t) => {
+        rd.getCell(rr, 1).value = t.kind;
+        rd.getCell(rr, 2).value = t.what;
+        rd.getCell(rr, 3).value = t.pass;
+        rd.getCell(rr, 4).value = [t.who, t.phase].filter(Boolean).join(" · ");
+        [2, 3].forEach((c) => (rd.getCell(rr, c).alignment = { wrapText: true, vertical: "top" }));
+        rr += 1;
+      });
+      rr += 1;
+    }
+    if (solution.cutover?.approach) {
+      sectionHdr("MIGRATION & CUTOVER");
+      const rows: [string, string | undefined][] = [
+        ["Approach", solution.cutover.approach],
+        ["Coexistence", solution.cutover.coexistence],
+        ["Rollback", solution.cutover.rollback],
+        ["Downtime", solution.cutover.downtime],
+      ];
+      rows.filter(([, v]) => v).forEach(([k, v]) => {
+        rd.getCell(rr, 1).value = k;
+        rd.getCell(rr, 1).font = { bold: true };
+        rd.getCell(rr, 2).value = v;
+        rd.getCell(rr, 2).alignment = { wrapText: true, vertical: "top" };
+        rr += 1;
+      });
+      rr += 1;
+    }
+    const rel = solution.reliability;
+    if (rel) {
+      sectionHdr("RELIABILITY & RECOVERY");
+      const rows: [string, string | undefined][] = [
+        ["Availability", rel.availabilityTarget],
+        ["RTO / RPO", rel.rtoRpo ? `RTO ${rel.rtoRpo.rto}${rel.rtoRpo.rpo ? ` · RPO ${rel.rtoRpo.rpo}` : ""}${rel.rtoRpo.basis ? ` — ${rel.rtoRpo.basis}` : ""}` : undefined],
+        ["Backups", rel.backup],
+      ];
+      rows.filter(([, v]) => v).forEach(([k, v]) => {
+        rd.getCell(rr, 1).value = k;
+        rd.getCell(rr, 1).font = { bold: true };
+        rd.getCell(rr, 2).value = v;
+        rd.getCell(rr, 2).alignment = { wrapText: true, vertical: "top" };
+        rr += 1;
+      });
+      (rel.failureModes ?? []).forEach((f) => {
+        rd.getCell(rr, 1).value = "Failure mode";
+        rd.getCell(rr, 2).value = `${f.failure}${f.impact ? ` — impact: ${f.impact}` : ""}`;
+        rd.getCell(rr, 3).value = `Handling: ${f.handling}`;
+        [2, 3].forEach((c) => (rd.getCell(rr, c).alignment = { wrapText: true, vertical: "top" }));
+        rr += 1;
+      });
+    }
   }
 
   const buf = await wb.xlsx.writeBuffer();

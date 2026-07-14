@@ -187,6 +187,12 @@ interface AdoptionStep { title: string; detail: string; }
 interface Alternative { name: string; summary: string; tools?: string[]; estimatedCost?: string; tradeoff?: string; }
 interface Evaluated { name: string; verdict: string; reason: string; sourceUrl?: string; }
 interface TeamRole { role: string; count?: number; skills?: string[]; commitment?: string; phases?: string; staffing?: string; }
+interface NonFunctionalReq { type: string; requirement: string; source: string; }
+interface Requirements { functional?: string[]; nonFunctional?: NonFunctionalReq[]; }
+interface TestStep { kind: string; what: string; who?: string; pass: string; phase?: string; }
+interface Cutover { approach: string; coexistence?: string; rollback?: string; downtime?: string; }
+interface FailureMode { failure: string; impact?: string; handling: string; }
+interface Reliability { availabilityTarget?: string; rtoRpo?: { rto: string; rpo?: string; basis?: string }; failureModes?: FailureMode[]; backup?: string; }
 interface Solution {
   title: string; insight?: string; insightSourceUrl?: string; insightSourceUrls?: string[]; insightSourceQuote?: string; summary: string; tools: Tool[];
   phases: Phase[]; estimatedCost: string; timeToImplement: string;
@@ -199,6 +205,10 @@ interface Solution {
   operations?: Operations;
   beforeYouStart?: string[];
   costOfInaction?: { annualCost: string; basis: string; paybackPeriod?: string };
+  requirements?: Requirements;
+  testStrategy?: TestStep[];
+  cutover?: Cutover;
+  reliability?: Reliability;
 }
 interface Context {
   size: string; stack: string; budget: string; timeline: string;
@@ -1028,6 +1038,47 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
           </div>
         )}
 
+        {/* Requirements catalog — what the solution must do, and which
+            constraints were stated by the user vs inferred by the AI */}
+        {solution.requirements && ((solution.requirements.functional?.length ?? 0) > 0 || (solution.requirements.nonFunctional?.length ?? 0) > 0) && (
+          <div data-requirements className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">What It Must Do</h2>
+            <p className="text-white/40 text-sm mb-4">The requirements this plan is built against — anything tagged <span className="text-amber-300/80">inferred</span> is an assumption worth correcting.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {solution.requirements.functional && solution.requirements.functional.length > 0 && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-2.5">Functional</p>
+                  <ul className="space-y-1.5">
+                    {solution.requirements.functional.map((f, i) => (
+                      <li key={i} className="flex gap-2 text-sm text-white/60">
+                        <CheckCircle2 className="w-4 h-4 text-blue-400/70 shrink-0 mt-0.5" /><span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {solution.requirements.nonFunctional && solution.requirements.nonFunctional.length > 0 && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-2.5">Non-functional</p>
+                  <ul className="space-y-2">
+                    {solution.requirements.nonFunctional.map((n, i) => (
+                      <li key={i} className="text-sm text-white/60">
+                        <span className="inline-flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] uppercase tracking-wider bg-white/[0.08] border border-white/15 rounded-full px-2 py-0.5 text-white/50">{n.type}</span>
+                          {n.source === "inferred" && (
+                            <span className="text-[10px] uppercase tracking-wider bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5 text-amber-300/90" title="The AI assumed this — verify it">inferred</span>
+                          )}
+                        </span>
+                        <span className="block mt-1">{n.requirement}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Unlock banner — the implementation kit sits behind the $1 */}
         {!unlocked && (
           <div className="mb-12 border border-white/20 bg-gradient-to-br from-white/8 to-white/3 rounded-2xl p-6">
@@ -1151,6 +1202,48 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                 <p className="text-white/40 text-xs uppercase tracking-wider mb-2">📈 What happens at 10x scale</p>
                 <p className="text-sm text-white/60">{solution.operations.scalability}</p>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Reliability & recovery — what breaks, what it costs, how you get back */}
+        {solution.reliability && (solution.reliability.availabilityTarget || solution.reliability.rtoRpo || (solution.reliability.failureModes?.length ?? 0) > 0 || solution.reliability.backup) && (
+          <div data-reliability className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Reliability & Recovery</h2>
+            <p className="text-white/40 text-sm mb-4">What happens when things break — targets grounded in your business, not vendor marketing.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              {solution.reliability.availabilityTarget && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5">🎯 Availability target</p>
+                  <p className="text-sm text-white/70">{solution.reliability.availabilityTarget}</p>
+                </div>
+              )}
+              {solution.reliability.rtoRpo && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5">⏱ Recovery targets</p>
+                  <p className="text-sm text-white/70">
+                    <span className="font-semibold text-white">RTO {solution.reliability.rtoRpo.rto}</span>
+                    {solution.reliability.rtoRpo.rpo && <> · <span className="font-semibold text-white">RPO {solution.reliability.rtoRpo.rpo}</span></>}
+                  </p>
+                  {solution.reliability.rtoRpo.basis && <p className="text-xs text-white/45 mt-1">{solution.reliability.rtoRpo.basis}</p>}
+                </div>
+              )}
+            </div>
+            {solution.reliability.failureModes && solution.reliability.failureModes.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {solution.reliability.failureModes.map((f, i) => (
+                  <div key={i} className="bg-white/3 border border-white/10 rounded-xl px-4 py-3">
+                    <p className="text-sm text-white font-medium flex items-center gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400/80 shrink-0" />{f.failure}
+                    </p>
+                    {f.impact && <p className="text-xs text-white/45 mt-1">Impact: {f.impact}</p>}
+                    <p className="text-xs text-emerald-300/80 mt-1">Handling: {f.handling}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {solution.reliability.backup && (
+              <p className="text-xs text-white/50 bg-white/3 border border-white/10 rounded-xl px-4 py-3">💾 <span className="text-white/40 uppercase tracking-wider text-[10px] mr-1.5">Backups</span>{solution.reliability.backup}</p>
             )}
           </div>
         )}
@@ -1469,6 +1562,59 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Testing & validation — how you prove it works before going all-in */}
+        {solution.testStrategy && solution.testStrategy.length > 0 && (
+          <div data-teststrategy className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Testing & Validation</h2>
+            <p className="text-white/40 text-sm mb-4">Prove it works before the whole team depends on it — each test has an owner and a measurable pass bar.</p>
+            <div className="space-y-2">
+              {solution.testStrategy.map((t, i) => (
+                <div key={i} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-[10px] uppercase tracking-wider bg-blue-500/10 border border-blue-500/30 rounded-full px-2 py-0.5 text-blue-300">{t.kind}</span>
+                    {t.phase && <span className="text-[10px] uppercase tracking-wider text-white/35">{t.phase}</span>}
+                    {t.who && <span className="text-xs text-white/40 ml-auto">👤 {t.who}</span>}
+                  </div>
+                  <p className="text-sm text-white/70">{t.what}</p>
+                  <p className="text-xs text-emerald-300/80 mt-1 flex items-start gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-px" />Pass: {t.pass}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Migration & cutover — how the switch happens, and the way back */}
+        {solution.cutover && (
+          <div data-cutover className="mb-12">
+            <h2 className="text-xl font-semibold mb-1">Migration & Cutover</h2>
+            <p className="text-white/40 text-sm mb-4">How the switch actually happens — and the escape hatch if it goes sideways.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5">🔀 Approach</p>
+                <p className="text-sm text-white/70">{solution.cutover.approach}</p>
+              </div>
+              {solution.cutover.coexistence && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5">🤝 Old & new side by side</p>
+                  <p className="text-sm text-white/70">{solution.cutover.coexistence}</p>
+                </div>
+              )}
+              {solution.cutover.rollback && (
+                <div className="bg-amber-500/[0.06] border border-amber-500/25 rounded-xl p-4">
+                  <p className="text-amber-300/80 text-xs uppercase tracking-wider mb-1.5">↩ Rollback plan</p>
+                  <p className="text-sm text-white/70">{solution.cutover.rollback}</p>
+                </div>
+              )}
+              {solution.cutover.downtime && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5">⏸ Expected downtime</p>
+                  <p className="text-sm text-white/70">{solution.cutover.downtime}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
