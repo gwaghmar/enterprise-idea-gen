@@ -444,6 +444,11 @@ ${preferCloud ? `- CLOUD PREFERENCE (user opted in): their data lives on ${prefe
 - Each teamRequired role carries "count": the NUMBER of people needed in that role (an integer, usually 1; e.g. 2 data engineers for a multi-ERP migration at this scale). Ground it in the workload — never inflate
 - caseStudies: 2-3 real implementation examples taken ONLY from the case-study research above — if the research names the company, use it; otherwise describe the org honestly ("mid-size US insurer") — each MUST carry the sourceUrl it came from. If the research contains no usable real examples, OMIT the caseStudies field entirely; never invent one
 - beforeYouStart: the decisions/gaps to settle before day 1 — unresolved conditionals from the problem statement (e.g. an undecided cloud migration), prerequisites, and anything you deliberately cut from scope
+- requirements: the catalog of what the solution must do — 3-6 functional and 3-5 non-functional entries. Every non-functional entry carries "source": "stated" (the user actually said it) or "inferred" (your professional assumption they should verify) — never pass an inference off as stated
+- testStrategy: 3-5 validation steps proving the solution works before full rollout, each with a MEASURABLE pass condition and a named owner. Scale rigor honestly to the team (${techLevel}) and company size — a no-code startup gets a spreadsheet-checkable UAT, not an enterprise QA program
+- cutover: how the switch from the old process/system actually happens — approach (parallel run / phased / big bang) with why it fits this company, the coexistence period, a CONCRETE rollback (what gets disabled, what the fallback process is, the data-loss exposure), and expected downtime
+- reliability: ground availabilityTarget in the business need (match the vendor SLA tier being bought — never a generic "five nines"), rtoRpo with the business basis for those numbers, 2-4 realistic failure modes with concrete handling, and where backups actually live — for SaaS tools backup is usually the vendor's responsibility, so flag verifying it in the DPA
+- Depth scaling for the four sections above: for Startup keep each to 1-3 lean items; SMB/Enterprise get full depth. Never fake process a company this size wouldn't run
 - Lead with the insight most companies miss about this problem
 - Choose tools that ACTUALLY integrate with ${stack} — verify from the research above
 - If the problem describes a head-to-head decision between two or more specific tools (e.g. "X vs Y", "deciding between X and Y", "replace X with Y"), do NOT treat the losing candidate as already-deployed infrastructure anywhere in the report — no permissions, no federation/integration steps, no TCO line item for it unless it is explicitly kept as a supporting tool. Every permission/access item you list must state in plain language WHY it's needed (who uses it and for what), not just the raw privilege name
@@ -482,6 +487,12 @@ Return ONLY valid JSON, no markdown, no explanation:
     { "name": "Rejected candidate", "verdict": "rejected", "reason": "Why it loses for this specific scenario" }
   ],
   "summary": "2-3 sentences: what the solution is, which tools, and what measurable outcome they get.",
+  "requirements": {
+    "functional": ["What the solution must DO, from the problem statement — e.g. 'Capture supplier invoices from email PDFs automatically'", "3-6 items"],
+    "nonFunctional": [
+      { "type": "One of: Performance | Availability | Security | Compliance | Usability | Scalability", "requirement": "Measurable where possible — e.g. 'Sub-second dashboard queries at stated event volume'", "source": "stated (the user said it) or inferred (your assumption — they should verify)" }
+    ]
+  },
   "costOfInaction": {
     "annualCost": "What NOT solving this costs per year, grounded in the numbers in the problem statement — e.g. '~$180,000/year' — omit the whole costOfInaction object if you cannot ground this in a real number from the problem",
     "basis": "One line showing the math — e.g. '15 hrs/week manual work x loaded analyst cost + ~8% error rate delaying month-end close'",
@@ -555,6 +566,15 @@ Return ONLY valid JSON, no markdown, no explanation:
       ]
     }
   ],
+  "testStrategy": [
+    { "kind": "One of: Integration | UAT | Load | Security | Resilience | Data validation", "what": "Concrete test — e.g. 'Replay 50 real invoices from last quarter through capture'", "who": "Who runs it — e.g. AP lead + implementation engineer", "pass": "Measurable pass condition — e.g. '≥98% field accuracy, 0 duplicate postings'", "phase": "Which phase — e.g. Phase 2" }
+  ],
+  "cutover": {
+    "approach": "Parallel run | Phased by team/region | Big bang — and one line on why it fits this company",
+    "coexistence": "How long both old and new run together and which is the source of truth — e.g. 'Both live 2 weeks; old process remains source of truth'",
+    "rollback": "CONCRETE: what gets disabled, what the fallback process is, and the data-loss exposure — e.g. 'Disable the connector, revert approvals to email; exposure: none, source data untouched'",
+    "downtime": "e.g. 'None expected' or '2-hour window on cutover night'"
+  },
   "teamRequired": [
     {
       "role": "Concrete role name — e.g. Integration Engineer",
@@ -587,6 +607,14 @@ Return ONLY valid JSON, no markdown, no explanation:
   "operations": {
     "monitoring": ["How you'll know it's healthy — a concrete signal to watch and where (e.g. 'Snowflake credit usage dashboard, alert at 80% of budget')", "Another — e.g. pipeline failure alerting", "2-4 items"],
     "scalability": "One or two sentences: what happens at 5-10x volume/users — what holds, what needs upgrading first, rough trigger point"
+  },
+  "reliability": {
+    "availabilityTarget": "Grounded in the business need and the vendor SLA tier actually being bought — e.g. '99.9% business hours; matches vendor Pro SLA'",
+    "rtoRpo": { "rto": "e.g. 4 hours", "rpo": "e.g. 24 hours", "basis": "The business reason for those numbers — e.g. 'invoices can queue a day; month-end close cannot slip'" },
+    "failureModes": [
+      { "failure": "Realistic failure — e.g. Vendor API outage", "impact": "What breaks for the business", "handling": "Concrete handling — e.g. 'automatic retry + documented manual fallback'" }
+    ],
+    "backup": "Where the system-of-record data lives and who backs it up — for SaaS usually the vendor: name what to verify in the DPA"
   },
   "beforeYouStart": ["A decision or gap to settle BEFORE implementation begins — e.g. 'Confirm whether the AWS migration is happening this year; it changes the region strategy'", "Another — deliberate scope cuts, prerequisites, or open questions. 2-4 items."],
   "kpis": [
@@ -648,13 +676,17 @@ Node labels: 3-5 words MAX, and they must be SPECIFIC to that phase — name the
           { key: "insight", narr: "Leading with the key insight" },
           { key: "evaluated", narr: "Evaluating candidate solutions against your scenario" },
           { key: "summary" },
+          { key: "requirements", narr: "Cataloging functional & non-functional requirements" },
           { key: "costOfInaction", narr: "Pricing what doing nothing costs" },
           { key: "tools", narr: "Selecting the tool stack" },
           { key: "phases", narr: "Building the implementation phases" },
+          { key: "testStrategy", narr: "Writing the test & UAT plan" },
+          { key: "cutover", narr: "Planning migration & cutover" },
           { key: "teamRequired", narr: "Sizing the team & skills needed" },
           { key: "estimatedCost", narr: "Itemizing the costs" },
           { key: "timeToImplement" },
           { key: "tco", narr: "Calculating total cost of ownership" },
+          { key: "reliability", narr: "Stress-testing reliability & recovery" },
           { key: "kpis", narr: "Defining success metrics" },
           { key: "adoptionPlan", narr: "Writing the adoption plan" },
           { key: "alternative", narr: "Drafting the Option B alternative" },

@@ -174,6 +174,46 @@ export function normalizeSolution(raw: any): any {
       monitoring: strArr(s.operations.monitoring, 4, 200),
       scalability: str(s.operations.scalability, 350) || undefined,
     } : undefined,
+    requirements: (() => {
+      if (!s.requirements || typeof s.requirements !== "object") return undefined;
+      const functional = strArr(s.requirements.functional, 6, 250);
+      const nonFunctional = arr(s.requirements.nonFunctional).map((n: any) => ({
+        type: str(n?.type, 30) || "General",
+        requirement: str(n?.requirement, 250),
+        source: /stated|user|explicit/i.test(str(n?.source, 30)) ? "stated" : "inferred",
+      })).filter((n: any) => n.requirement).slice(0, 6);
+      return functional.length || nonFunctional.length ? { functional, nonFunctional } : undefined;
+    })(),
+    testStrategy: arr(s.testStrategy).map((t: any) => ({
+      kind: str(t?.kind, 30) || "Validation",
+      what: str(t?.what, 250),
+      who: str(t?.who, 100) || undefined,
+      pass: str(t?.pass, 200),
+      phase: str(t?.phase, 40) || undefined,
+    })).filter((t: any) => t.what && t.pass).slice(0, 6),
+    cutover: s.cutover && typeof s.cutover === "object" && str(s.cutover.approach, 300) ? {
+      approach: str(s.cutover.approach, 300),
+      coexistence: str(s.cutover.coexistence, 300) || undefined,
+      rollback: str(s.cutover.rollback, 350) || undefined,
+      downtime: str(s.cutover.downtime, 150) || undefined,
+    } : undefined,
+    reliability: (() => {
+      if (!s.reliability || typeof s.reliability !== "object") return undefined;
+      const failureModes = arr(s.reliability.failureModes).map((f: any) => ({
+        failure: str(f?.failure, 120),
+        impact: str(f?.impact, 200) || undefined,
+        handling: str(f?.handling, 250),
+      })).filter((f: any) => f.failure && f.handling).slice(0, 4);
+      const availabilityTarget = str(s.reliability.availabilityTarget, 200) || undefined;
+      const rtoRpo = s.reliability.rtoRpo && typeof s.reliability.rtoRpo === "object" && str(s.reliability.rtoRpo.rto, 40) ? {
+        rto: str(s.reliability.rtoRpo.rto, 40),
+        rpo: str(s.reliability.rtoRpo.rpo, 40) || undefined,
+        basis: str(s.reliability.rtoRpo.basis, 250) || undefined,
+      } : undefined;
+      const backup = str(s.reliability.backup, 300) || undefined;
+      return availabilityTarget || rtoRpo || failureModes.length || backup
+        ? { availabilityTarget, rtoRpo, failureModes, backup } : undefined;
+    })(),
     beforeYouStart: strArr(s.beforeYouStart, 4, 250),
     alternative: s.alternative && typeof s.alternative === "object" && str(s.alternative.name, 90) ? {
       name: str(s.alternative.name, 90),

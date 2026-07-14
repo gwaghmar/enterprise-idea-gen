@@ -31,6 +31,10 @@ interface Solution {
   operations?: { monitoring?: string[]; scalability?: string };
   beforeYouStart?: string[];
   dataFlow?: { from: string; to: string; via: string; note?: string }[];
+  requirements?: { functional?: string[]; nonFunctional?: { type: string; requirement: string; source: string }[] };
+  testStrategy?: { kind: string; what: string; who?: string; pass: string; phase?: string }[];
+  cutover?: { approach: string; coexistence?: string; rollback?: string; downtime?: string };
+  reliability?: { availabilityTarget?: string; rtoRpo?: { rto: string; rpo?: string; basis?: string }; failureModes?: { failure: string; impact?: string; handling: string }[]; backup?: string };
 }
 interface Context {
   size: string; stack: string; budget: string; timeline: string;
@@ -884,6 +888,66 @@ export async function generatePDF(
         roomCost(12);
         y = wrapText(doc, `At 10x scale: ${ops.scalability}`, ML, y + 1.5, CW, 7.8, C.dark, "italic");
       }
+      y += 5;
+    }
+
+    // Requirements catalog — inferred entries flagged for verification
+    const reqs = solution.requirements;
+    if (reqs && ((reqs.functional?.length ?? 0) > 0 || (reqs.nonFunctional?.length ?? 0) > 0)) {
+      roomCost(28);
+      y = sectionLabel(doc, "Requirements", y);
+      (reqs.functional ?? []).forEach((f) => { roomCost(10); y = wrapText(doc, `- ${f}`, ML + 2, y, CW - 4, 7.8, C.mid, "normal"); y += 1; });
+      (reqs.nonFunctional ?? []).forEach((n) => {
+        roomCost(10);
+        y = wrapText(doc, `- [${n.type}${n.source === "inferred" ? " - inferred, verify" : ""}] ${n.requirement}`, ML + 2, y, CW - 4, 7.8, n.source === "inferred" ? [180, 83, 9] : C.mid, "normal");
+        y += 1;
+      });
+      y += 5;
+    }
+
+    // Reliability & recovery
+    const rel = solution.reliability;
+    if (rel && (rel.availabilityTarget || rel.rtoRpo || (rel.failureModes?.length ?? 0) > 0 || rel.backup)) {
+      roomCost(28);
+      y = sectionLabel(doc, "Reliability & Recovery", y);
+      if (rel.availabilityTarget) { roomCost(10); y = wrapText(doc, `Availability: ${rel.availabilityTarget}`, ML, y, CW, 7.8, C.dark, "normal"); y += 1; }
+      if (rel.rtoRpo) {
+        roomCost(10);
+        y = wrapText(doc, `RTO ${rel.rtoRpo.rto}${rel.rtoRpo.rpo ? ` - RPO ${rel.rtoRpo.rpo}` : ""}${rel.rtoRpo.basis ? ` (${rel.rtoRpo.basis})` : ""}`, ML, y, CW, 7.8, C.dark, "normal");
+        y += 1;
+      }
+      (rel.failureModes ?? []).forEach((f) => {
+        roomCost(12);
+        y = wrapText(doc, `- ${f.failure}${f.impact ? ` — impact: ${f.impact}` : ""}`, ML + 2, y, CW - 4, 7.8, C.mid, "normal");
+        y = wrapText(doc, `Handling: ${f.handling}`, ML + 6, y, CW - 10, 7.5, [5, 150, 105], "normal");
+        y += 1;
+      });
+      if (rel.backup) { roomCost(10); y = wrapText(doc, `Backups: ${rel.backup}`, ML, y + 0.5, CW, 7.5, C.mid, "italic"); }
+      y += 5;
+    }
+
+    // Testing & validation
+    if (solution.testStrategy && solution.testStrategy.length > 0) {
+      roomCost(28);
+      y = sectionLabel(doc, "Testing & Validation", y);
+      solution.testStrategy.forEach((t) => {
+        roomCost(14);
+        y = wrapText(doc, `[${t.kind}${t.phase ? ` · ${t.phase}` : ""}${t.who ? ` · ${t.who}` : ""}] ${t.what}`, ML + 2, y, CW - 4, 7.8, C.dark, "normal");
+        y = wrapText(doc, `Pass: ${t.pass}`, ML + 6, y, CW - 10, 7.5, [5, 150, 105], "normal");
+        y += 1.5;
+      });
+      y += 5;
+    }
+
+    // Migration & cutover
+    const cut = solution.cutover;
+    if (cut && cut.approach) {
+      roomCost(24);
+      y = sectionLabel(doc, "Migration & Cutover", y);
+      y = wrapText(doc, `Approach: ${cut.approach}`, ML, y, CW, 7.8, C.dark, "normal"); y += 1;
+      if (cut.coexistence) { roomCost(10); y = wrapText(doc, `Coexistence: ${cut.coexistence}`, ML, y, CW, 7.8, C.mid, "normal"); y += 1; }
+      if (cut.rollback) { roomCost(10); y = wrapText(doc, `Rollback: ${cut.rollback}`, ML, y, CW, 7.8, [180, 83, 9], "normal"); y += 1; }
+      if (cut.downtime) { roomCost(10); y = wrapText(doc, `Downtime: ${cut.downtime}`, ML, y, CW, 7.8, C.mid, "normal"); }
       y += 5;
     }
 
