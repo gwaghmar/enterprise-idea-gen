@@ -16,6 +16,7 @@ import ArchitectureMap from "./architecture-map";
 import { hasArchitectureData } from "@/lib/generate-architecture";
 import { rollupForRole } from "@/lib/role-rollup";
 import { deriveAdrs } from "@/lib/derive-adrs";
+import { deriveTcoMoney } from "@/lib/normalize-solution";
 
 // Citations/activity URLs come from external sources — only render links for
 // http(s) URLs so a crafted share payload can't smuggle javascript: links
@@ -994,18 +995,22 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
         <div className="mb-12 bg-gradient-to-br from-white/5 to-white/2 border border-white/15 rounded-2xl p-6">
           <p className="text-white/40 text-xs uppercase tracking-wider mb-4">Executive Summary</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-            {/* A metric with no value is dropped, never rendered as an empty
-                box — a repaired/partial report was leaving blank cells under
-                the labels and "6 tools" sitting beneath a money label */}
-            {[
-              { label: "Est. Monthly Cost", value: solution.estimatedCost || solution.tco?.monthlyRecurring },
-              { label: "First-Year Total", value: solution.tco?.firstYearTotal },
-              { label: "Time to Implement", value: solution.timeToImplement },
-              { label: "Tool Stack", value: solution.tools.length ? `${solution.tools.length} tools` : "" },
-              { label: "Implementation Phases", value: solution.phases.length ? `${solution.phases.length} phases` : "" },
-            ].filter((m) => m.value && m.value.trim()).slice(0, 4).map((m) => (
-              <MetricBox key={m.label} label={m.label} value={m.value} />
-            ))}
+            {/* Missing money figures are DERIVED from the itemized TCO costs
+                ("~" marks the estimate) — repaired/older reports lose the
+                headline totals while the line items survive. A metric with no
+                value at all is dropped, never rendered as an empty box. */}
+            {(() => {
+              const derived = deriveTcoMoney(solution.tco?.lineItems ?? []);
+              return [
+                { label: "Est. Monthly Cost", value: solution.estimatedCost || solution.tco?.monthlyRecurring || derived.monthly },
+                { label: "First-Year Total", value: solution.tco?.firstYearTotal || derived.firstYear },
+                { label: "Time to Implement", value: solution.timeToImplement },
+                { label: "Tool Stack", value: solution.tools.length ? `${solution.tools.length} tools` : "" },
+                { label: "Implementation Phases", value: solution.phases.length ? `${solution.phases.length} phases` : "" },
+              ].filter((m) => m.value && m.value.trim()).slice(0, 4).map((m) => (
+                <MetricBox key={m.label} label={m.label} value={m.value} />
+              ));
+            })()}
           </div>
         </div>
 

@@ -36,6 +36,34 @@ function shortValue(v: unknown, maxLen: number): string {
   return val.slice(0, maxLen - 1) + "…";
 }
 
+// Headline money figures derived from the itemized costs — repaired/partial
+// reports sometimes lose the totals while the line items survive. "~" marks
+// them as computed estimates.
+export function deriveTcoMoney(lineItems: { type: string; cost: string }[]): { monthly?: string; firstYear?: string } {
+  const parse = (v: string): number | null => {
+    const m = v.replace(/,/g, "").match(/\$\s?(\d+(?:\.\d+)?)\s*(k|m)?/i);
+    if (!m) return null;
+    let n = parseFloat(m[1]);
+    if (/^k$/i.test(m[2] ?? "")) n *= 1_000;
+    if (/^m$/i.test(m[2] ?? "")) n *= 1_000_000;
+    return n;
+  };
+  let monthly = 0, oneTime = 0, any = false;
+  for (const li of lineItems ?? []) {
+    const n = parse(li?.cost ?? "");
+    if (n == null) continue;
+    any = true;
+    if (li.type === "One-time") oneTime += n;
+    else monthly += /\/\s?(yr|year|annual)/i.test(li.cost) ? n / 12 : n;
+  }
+  if (!any) return {};
+  const fmt = (n: number) => `~$${Math.round(n).toLocaleString("en-US")}`;
+  return {
+    monthly: monthly > 0 ? `${fmt(monthly)}/mo` : undefined,
+    firstYear: oneTime + monthly > 0 ? fmt(oneTime + monthly * 12) : undefined,
+  };
+}
+
 export function normalizeSolution(raw: any): any {
   const s = raw && typeof raw === "object" ? raw : {};
 
@@ -104,6 +132,8 @@ export function normalizeSolution(raw: any): any {
 
   const verdictOf = (v: unknown) => (/chosen|selected|winner|pick/i.test(str(v, 30)) ? "chosen" : "rejected");
 
+  const derivedMoney = deriveTcoMoney(lineItems);
+
   return {
     ...s,
     title: str(s.title, 90) || "Implementation Plan",
@@ -118,7 +148,8 @@ export function normalizeSolution(raw: any): any {
       paybackPeriod: str(s.costOfInaction.paybackPeriod, 60) || undefined,
     } : undefined,
     // The two fields that wrecked the mobile layout — hard-shortened here
-    estimatedCost: shortValue(s.estimatedCost, 40),
+    // (and backfilled from line items when the model dropped the total)
+    estimatedCost: shortValue(s.estimatedCost, 40) || derivedMoney.monthly || "",
     timeToImplement: shortValue(s.timeToImplement, 60),
     tools,
     dataFlow,
@@ -153,8 +184,8 @@ export function normalizeSolution(raw: any): any {
       ...s.tco,
       lineItems,
       oneTimeSetup: shortValue(s.tco.oneTimeSetup, 40),
-      monthlyRecurring: shortValue(s.tco.monthlyRecurring, 40),
-      firstYearTotal: shortValue(s.tco.firstYearTotal, 40),
+      monthlyRecurring: shortValue(s.tco.monthlyRecurring, 40) || derivedMoney.monthly || "",
+      firstYearTotal: shortValue(s.tco.firstYearTotal, 40) || derivedMoney.firstYear || "",
       yearTwoRunRate: shortValue(s.tco.yearTwoRunRate, 40) || undefined,
       hiddenCosts: strArr(s.tco.hiddenCosts, 5, 250),
     } : undefined,
