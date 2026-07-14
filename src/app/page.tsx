@@ -506,8 +506,6 @@ export default function Home() {
   const [clarifyRating, setClarifyRating] = useState<"up" | "down" | null>(null);
   const [clarifyFbComment, setClarifyFbComment] = useState("");
   const [clarifyFbSent, setClarifyFbSent] = useState(false);
-  const [autoDetected, setAutoDetected] = useState<string[]>([]);
-  const [dismissedAuto, setDismissedAuto] = useState<string[]>([]);
   const [preferCloud, setPreferCloud] = useState(false);
   const [factIdx, setFactIdx] = useState(0);
   const [hasHistory, setHasHistory] = useState(false);
@@ -565,44 +563,9 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Autofill ONLY tools the user literally names in the problem text —
-  // exact catalog matches, no inference ("CRM" never becomes "Salesforce").
-  // Auto-picked chips render green until manually confirmed or removed.
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const text = problem.toLowerCase();
-      const nameHit = (name: string) => {
-        const n = name.toLowerCase().replace(/\s*\(.*\)$/, "");
-        if (n.length < 3) return false;
-        const idx = text.indexOf(n);
-        if (idx === -1) return false;
-        const before = idx === 0 ? " " : text[idx - 1];
-        const after = idx + n.length >= text.length ? " " : text[idx + n.length];
-        return !/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after);
-      };
-      const hits = [...STACKS.filter((x) => x !== "Recommend for me"), ...STACK_CATALOG]
-        .filter((name) => nameHit(name) && !dismissedAuto.includes(name));
-      setAutoDetected((prev) => {
-        const stale = prev.filter((n) => !hits.includes(n));
-        // add new hits that aren't already selected manually
-        hits.forEach((name) => {
-          if (prev.includes(name)) return;
-          if (STACKS.includes(name)) {
-            setStacks((st) => st.includes(name) ? st : [...st.filter((v) => v !== "Recommend for me"), name]);
-          } else {
-            setExtraStacks((ex) => ex.includes(name) ? ex : [...ex, name]);
-          }
-        });
-        // drop auto-picks the text no longer mentions
-        stale.forEach((name) => {
-          setStacks((st) => st.filter((v) => v !== name));
-          setExtraStacks((ex) => ex.filter((v) => v !== name));
-        });
-        return hits;
-      });
-    }, 500);
-    return () => clearTimeout(t);
-  }, [problem, dismissedAuto]);
+  // (Auto stack detection was removed: silently adding chips as the user
+  // typed caused surprise selections — tools mentioned as candidates, not
+  // deployed stack — and fought with manual edits. Users pick their stack.)
 
   // After a failed run the user lands back on the form — bring the error
   // (and its Continue button) into view instead of leaving them at the top
@@ -630,14 +593,6 @@ export default function Home() {
       return;
     }
     // Any other selection clears "Recommend for me"
-    if (autoDetected.includes(v)) {
-      // Tapping a green auto-pick removes it and stops it re-adding
-      setDismissedAuto((d) => [...d, v]);
-      setAutoDetected((a) => a.filter((x) => x !== v));
-      setStacks((prev) => prev.filter((s) => s !== v));
-      setExtraStacks((prev) => prev.filter((s) => s !== v));
-      return;
-    }
     setStacks((prev) => {
       const without = prev.filter((s) => s !== "Recommend for me");
       return without.includes(v) ? without.filter((s) => s !== v) : [...without, v];
@@ -1211,7 +1166,6 @@ export default function Home() {
                 selected={stacks}
                 onToggle={toggleStack}
                 exclusive={["Recommend for me"]}
-                detected={autoDetected}
               />
               <MultiCombobox
                 options={STACK_CATALOG}
