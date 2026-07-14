@@ -7,6 +7,8 @@ import {
   Search, Sparkles, FileText, Brain, CheckCircle2, Circle,
   Lightbulb, Target, Clock, ArrowRight, ArrowUpRight, ArrowLeft, AlertTriangle, Square, Wand2,
   Lock, Mail, Copy, FileDown, History,
+  Activity, TrendingUp, Timer, HardDrive, Hammer, Cog, User, Users,
+  ArrowLeftRight, Undo2, Pause, MessageSquare, LockOpen, X, ThumbsUp, ThumbsDown,
 } from "lucide-react";
 import { isPaid, updateHistory } from "@/lib/history";
 import { FREE_MODE } from "@/lib/config";
@@ -948,7 +950,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                 className="px-3.5 py-1.5 rounded-full text-sm bg-blue-500 hover:bg-blue-400 disabled:opacity-40 text-white font-medium transition-colors">
                 {remixing === "swap:the current technology choices" ? "Reworking…" : "Rebuild"}
               </button>
-              <button onClick={() => setTechSwapOpen(false)} className="text-white/40 hover:text-white/70 text-xs transition-colors">✕</button>
+              <button onClick={() => setTechSwapOpen(false)} className="text-white/40 hover:text-white/70 transition-colors" aria-label="Close"><X className="w-3.5 h-3.5" /></button>
             </span>
           ) : (
             <button onClick={() => { setTechSwapOpen(true); setTechSwapText(""); }} disabled={!!remixing}
@@ -1112,7 +1114,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                       {m.count && <span className="text-xs text-white/40">({m.count})</span>}
                       <span className={`ml-auto text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 ${badge}`}>{m.role}</span>
                     </div>
-                    {m.caresAbout && <p className="text-sm text-white/60">💬 {m.caresAbout}</p>}
+                    {m.caresAbout && <p className="text-sm text-white/60 flex items-start gap-1.5"><MessageSquare className="w-3.5 h-3.5 mt-0.5 shrink-0 text-white/30" />{m.caresAbout}</p>}
                     {m.involvement && <p className="text-xs text-white/40 mt-1.5">{m.involvement}</p>}
                   </div>
                 );
@@ -1231,7 +1233,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
           <div data-operations className="mb-12 grid grid-cols-1 md:grid-cols-2 gap-3">
             {solution.operations.monitoring && solution.operations.monitoring.length > 0 && (
               <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                <p className="text-white/40 text-xs uppercase tracking-wider mb-2">📟 How you&apos;ll know it&apos;s working</p>
+                <p className="text-white/40 text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5"><Activity className="w-3.5 h-3.5" /> How you&apos;ll know it&apos;s working</p>
                 <ul className="space-y-1.5">
                   {solution.operations.monitoring.map((m, i) => (
                     <li key={i} className="flex gap-2 text-sm text-white/60"><CheckCircle2 className="w-4 h-4 text-emerald-400/70 shrink-0 mt-0.5" /><span>{m}</span></li>
@@ -1241,7 +1243,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
             )}
             {solution.operations.scalability && (
               <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                <p className="text-white/40 text-xs uppercase tracking-wider mb-2">📈 What happens at 10x scale</p>
+                <p className="text-white/40 text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> What happens at 10x scale</p>
                 <p className="text-sm text-white/60">{solution.operations.scalability}</p>
               </div>
             )}
@@ -1256,13 +1258,13 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
               {solution.reliability.availabilityTarget && (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5">🎯 Availability target</p>
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Target className="w-3.5 h-3.5" /> Availability target</p>
                   <p className="text-sm text-white/70">{solution.reliability.availabilityTarget}</p>
                 </div>
               )}
               {solution.reliability.rtoRpo && (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5">⏱ Recovery targets</p>
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" /> Recovery targets</p>
                   <p className="text-sm text-white/70">
                     <span className="font-semibold text-white">RTO {solution.reliability.rtoRpo.rto}</span>
                     {solution.reliability.rtoRpo.rpo && <> · <span className="font-semibold text-white">RPO {solution.reliability.rtoRpo.rpo}</span></>}
@@ -1285,7 +1287,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
               </div>
             )}
             {solution.reliability.backup && (
-              <p className="text-xs text-white/50 bg-white/3 border border-white/10 rounded-xl px-4 py-3">💾 <span className="text-white/40 uppercase tracking-wider text-[10px] mr-1.5">Backups</span>{solution.reliability.backup}</p>
+              <p className="text-xs text-white/50 bg-white/3 border border-white/10 rounded-xl px-4 py-3 flex items-start gap-1.5"><HardDrive className="w-3.5 h-3.5 shrink-0 text-white/35" /><span><span className="text-white/40 uppercase tracking-wider text-[10px] mr-1.5">Backups</span>{solution.reliability.backup}</span></p>
             )}
           </div>
         )}
@@ -1298,11 +1300,11 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
             {solution.staffingSummary && (
               <div data-staffing-summary className="flex flex-wrap gap-2 mb-4">
                 <span className="text-xs bg-blue-500/10 border border-blue-500/30 rounded-full px-3 py-1.5 text-blue-300 font-medium">
-                  🔨 Build: {solution.staffingSummary.buildFte}
+                  <Hammer className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />Build: {solution.staffingSummary.buildFte}
                 </span>
                 {solution.staffingSummary.runFte && (
                   <span className="text-xs bg-emerald-500/10 border border-emerald-500/30 rounded-full px-3 py-1.5 text-emerald-300 font-medium">
-                    ⚙️ Run: {solution.staffingSummary.runFte}
+                    <Cog className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />Run: {solution.staffingSummary.runFte}
                   </span>
                 )}
               </div>
@@ -1439,7 +1441,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                       <ul className="space-y-1 mb-3">
                         {a.alternatives.map((alt, j) => (
                           <li key={j} className="text-sm text-white/50 flex gap-2">
-                            <span className="text-white/25 shrink-0">✕</span>
+                            <X className="w-3 h-3 mt-0.5 text-white/25 shrink-0" />
                             <span><span className="text-white/70">{alt.name}</span> — {alt.reason}</span>
                           </li>
                         ))}
@@ -1521,7 +1523,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                       <p className={`text-xs flex items-start gap-1.5 pt-1 ${
                         tool.lockIn.level === "high" ? "text-red-400/80" : tool.lockIn.level === "medium" ? "text-amber-400/80" : "text-emerald-400/80"
                       }`}>
-                        <span className="shrink-0">{tool.lockIn.level === "high" ? "🔐" : tool.lockIn.level === "medium" ? "🔒" : "🔓"}</span>
+                        <span className="shrink-0">{tool.lockIn.level === "low" ? <LockOpen className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}</span>
                         <span>Exit difficulty: {tool.lockIn.level.toUpperCase()} — {tool.lockIn.reason}</span>
                       </p>
                     )}
@@ -1678,7 +1680,7 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className="text-[10px] uppercase tracking-wider bg-blue-500/10 border border-blue-500/30 rounded-full px-2 py-0.5 text-blue-300">{t.kind}</span>
                     {t.phase && <span className="text-[10px] uppercase tracking-wider text-white/35">{t.phase}</span>}
-                    {t.who && <span className="text-xs text-white/40 ml-auto">👤 {t.who}</span>}
+                    {t.who && <span className="text-xs text-white/40 ml-auto flex items-center gap-1"><User className="w-3 h-3" />{t.who}</span>}
                   </div>
                   <p className="text-sm text-white/70">{t.what}</p>
                   <p className="text-xs text-emerald-300/80 mt-1 flex items-start gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-px" />Pass: {t.pass}</p>
@@ -1695,24 +1697,24 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
             <p className="text-white/40 text-sm mb-4">How the switch actually happens — and the escape hatch if it goes sideways.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5">🔀 Approach</p>
+                <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><ArrowLeftRight className="w-3.5 h-3.5" /> Approach</p>
                 <p className="text-sm text-white/70">{solution.cutover.approach}</p>
               </div>
               {solution.cutover.coexistence && (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5">🤝 Old & new side by side</p>
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Old & new side by side</p>
                   <p className="text-sm text-white/70">{solution.cutover.coexistence}</p>
                 </div>
               )}
               {solution.cutover.rollback && (
                 <div className="bg-amber-500/[0.06] border border-amber-500/25 rounded-xl p-4">
-                  <p className="text-amber-300/80 text-xs uppercase tracking-wider mb-1.5">↩ Rollback plan</p>
+                  <p className="text-amber-300/80 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Undo2 className="w-3.5 h-3.5" /> Rollback plan</p>
                   <p className="text-sm text-white/70">{solution.cutover.rollback}</p>
                 </div>
               )}
               {solution.cutover.downtime && (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5">⏸ Expected downtime</p>
+                  <p className="text-white/40 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Pause className="w-3.5 h-3.5" /> Expected downtime</p>
                   <p className="text-sm text-white/70">{solution.cutover.downtime}</p>
                 </div>
               )}
@@ -2001,9 +2003,11 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
               <div className="flex items-center gap-3">
                 <p className="text-white/70 text-sm font-medium">Did this report nail it?</p>
                 <button onClick={() => setFeedback("up")}
-                  className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${feedback === "up" ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400" : "border-white/15 text-white/50 hover:text-white/80"}`}>👍</button>
+                  aria-label="Helpful"
+                  className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${feedback === "up" ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400" : "border-white/15 text-white/50 hover:text-white/80"}`}><ThumbsUp className="w-4 h-4" /></button>
                 <button onClick={() => setFeedback("down")}
-                  className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${feedback === "down" ? "border-red-500/50 bg-red-500/10 text-red-400" : "border-white/15 text-white/50 hover:text-white/80"}`}>👎</button>
+                  aria-label="Not helpful"
+                  className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${feedback === "down" ? "border-red-500/50 bg-red-500/10 text-red-400" : "border-white/15 text-white/50 hover:text-white/80"}`}><ThumbsDown className="w-4 h-4" /></button>
               </div>
               {feedback && (
                 <div className="flex gap-2">

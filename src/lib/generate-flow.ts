@@ -38,16 +38,16 @@ export function buildJourneyFlow(solution: any, problem: string, context?: { sta
   let chainTail = ""; // id of the last node to chain the next group's entry from
 
   // ── TODAY ──────────────────────────────────────────────────────────────
-  groups.push({ id: "today", label: "📍 TODAY", accent: "red" });
-  nodes.push({ id: "p0", label: `🔥 ${clip(problem, 90)}`, type: "problem", group: "today" });
+  groups.push({ id: "today", label: "TODAY", accent: "red" });
+  nodes.push({ id: "p0", label: `Problem: ${clip(problem, 90)}`, type: "problem", group: "today" });
   chainTail = "p0";
   const stack = String(context?.stack ?? "").split(",").map((s) => s.trim()).filter((s) => s && !/recommend for me/i.test(s)).slice(0, 5);
   if (stack.length) {
-    nodes.push({ id: "stack", label: `🖥 ${clip(stack.join(" · "), 60)}`, type: "stack", group: "today" });
+    nodes.push({ id: "stack", label: `Stack: ${clip(stack.join(" · "), 60)}`, type: "stack", group: "today" });
     edges.push({ from: "p0", to: "stack" });
   }
   if (solution?.costOfInaction?.annualCost) {
-    nodes.push({ id: "inaction", label: `💸 Costs ${clip(solution.costOfInaction.annualCost, 25)}/yr to leave unsolved`, type: "risk", group: "today" });
+    nodes.push({ id: "inaction", label: `Costs ${clip(solution.costOfInaction.annualCost, 25)}/yr to leave unsolved`, type: "risk", group: "today" });
     edges.push({ from: stack.length ? "stack" : "p0", to: "inaction" });
     chainTail = "inaction";
   }
@@ -55,7 +55,7 @@ export function buildJourneyFlow(solution: any, problem: string, context?: { sta
   // ── TOOLS ──────────────────────────────────────────────────────────────
   const tools: any[] = (solution?.tools ?? []).slice(0, 6);
   if (tools.length) {
-    groups.push({ id: "tools", label: "🧰 NEW TOOLS", accent: "blue" });
+    groups.push({ id: "tools", label: "NEW TOOLS", accent: "blue" });
     tools.forEach((t, i) => {
       const id = `tool${i}`;
       nodes.push({ id, label: `${clip(t.name, 26)}\n${clip(t.category, 18)}`, type: "tool", group: "tools" });
@@ -70,11 +70,11 @@ export function buildJourneyFlow(solution: any, problem: string, context?: { sta
   const team: any[] = solution?.teamRequired ?? [];
   phases.forEach((ph, pi) => {
     const gid = `ph${pi}`;
-    groups.push({ id: gid, label: `🚀 ${clip(ph.title, 46)}`, accent: "slate" });
+    groups.push({ id: gid, label: clip(ph.title, 46), accent: "slate" });
     let prev = "";
     if (ph.objective) {
       const id = `${gid}o`;
-      nodes.push({ id, label: `🎯 ${clip(ph.objective, 55)}`, type: "action", group: gid });
+      nodes.push({ id, label: `Goal: ${clip(ph.objective, 55)}`, type: "action", group: gid });
       prev = id;
     }
     const actions: string[] = (ph.actions ?? []).slice(0, 5);
@@ -88,13 +88,13 @@ export function buildJourneyFlow(solution: any, problem: string, context?: { sta
     let exitId = prev;
     if (exit.length && prev) {
       exitId = `${gid}g`;
-      nodes.push({ id: exitId, label: `✅ ${clip(exit.join(" · "), 55)}`, type: "gate", group: gid });
+      nodes.push({ id: exitId, label: `Done when: ${clip(exit.join(" · "), 55)}`, type: "gate", group: gid });
       edges.push({ from: prev, to: exitId });
     }
     // team roles as extra nodes inside the same group, dashed into the gate
     ownersFor(pi, String(ph.title ?? ""), team).slice(0, 3).forEach((o, oi) => {
       const id = `${gid}t${oi}`;
-      nodes.push({ id, label: `👤 ${clip(o, 24)}`, type: "team", group: gid });
+      nodes.push({ id, label: clip(o, 24), type: "team", group: gid });
       if (exitId) edges.push({ from: id, to: exitId, dashed: true });
     });
     if (chainTail && (ph.objective || actions.length)) {
@@ -106,7 +106,7 @@ export function buildJourneyFlow(solution: any, problem: string, context?: { sta
   // ── ADOPTION ───────────────────────────────────────────────────────────
   const adoption: any[] = (solution?.adoptionPlan ?? []).slice(0, 4);
   if (adoption.length) {
-    groups.push({ id: "adopt", label: "🤝 ADOPTION", accent: "blue" });
+    groups.push({ id: "adopt", label: "ADOPTION", accent: "blue" });
     adoption.forEach((a, i) => {
       const id = `ad${i}`;
       nodes.push({ id, label: clip(a.title, 45), type: "adopt", group: "adopt" });
@@ -117,18 +117,18 @@ export function buildJourneyFlow(solution: any, problem: string, context?: { sta
   }
 
   // ── OUTCOMES ───────────────────────────────────────────────────────────
-  groups.push({ id: "win", label: "🏁 OUTCOMES", accent: "green" });
+  groups.push({ id: "win", label: "OUTCOMES", accent: "green" });
   const kpis: any[] = (solution?.kpis ?? []).slice(0, 5);
   if (kpis.length) {
     kpis.forEach((k, i) => {
       const id = `k${i}`;
       const from = k.baseline ? `${clip(k.baseline, 12)}→` : "";
-      nodes.push({ id, label: `📈 ${clip(k.metric, 40)}\n${from}${clip(k.target, 18)}`, type: "outcome", group: "win" });
+      nodes.push({ id, label: `${clip(k.metric, 40)}\n${from}${clip(k.target, 18)}`, type: "outcome", group: "win" });
       if (i > 0) edges.push({ from: `k${i - 1}`, to: id });
     });
     edges.push({ from: chainTail, to: "k0" });
   } else {
-    nodes.push({ id: "k0", label: `📈 ${clip(solution?.summary, 70)}`, type: "outcome", group: "win" });
+    nodes.push({ id: "k0", label: clip(solution?.summary, 70), type: "outcome", group: "win" });
     edges.push({ from: chainTail, to: "k0" });
   }
 
@@ -136,13 +136,13 @@ export function buildJourneyFlow(solution: any, problem: string, context?: { sta
   const firstYear = solution?.tco?.firstYearTotal || solution?.estimatedCost;
   if (firstYear) {
     const monthly = solution?.tco?.monthlyRecurring ? ` · ${clip(solution.tco.monthlyRecurring, 16)} rec.` : "";
-    nodes.push({ id: "cost", label: `💰 ${clip(firstYear, 18)} yr1${monthly} · ${clip(solution?.timeToImplement, 20)}`, type: "cost" });
+    nodes.push({ id: "cost", label: `Investment: ${clip(firstYear, 18)} yr1${monthly} · ${clip(solution?.timeToImplement, 20)}`, type: "cost" });
     edges.push({ from: "cost", to: "k0", dashed: true });
   }
   const risks: any[] = (solution?.approvals?.riskAssessment ?? []).slice(0, 2);
   risks.forEach((r, i) => {
     const id = `risk${i}`;
-    nodes.push({ id, label: `⚠️ ${clip(r.risk ?? r.name ?? r, 45)}`, type: "risk" });
+    nodes.push({ id, label: `Risk: ${clip(r.risk ?? r.name ?? r, 45)}`, type: "risk" });
     edges.push({ from: id, to: "k0", dashed: true });
   });
 

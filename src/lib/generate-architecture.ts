@@ -73,13 +73,13 @@ export function buildArchitectureFlow(solution: any): ArchitectureFlow {
 
   envList.forEach((env) => {
     const gid = slug(env);
-    groups.push({ id: gid, label: `☁️ ${env}`, accent: ENV_ACCENT[env] || "slate" });
+    groups.push({ id: gid, label: env, accent: ENV_ACCENT[env] || "slate" });
     const envTools = env === "Your Stack" ? untaggedTools : tools.filter((t) => t.environment === env);
     envTools.forEach((t) => {
       const id = `n_${slug(t.name)}`;
       idByName.set(t.name.toLowerCase(), id);
       const badge = t.status === "existing" ? "🔹" : t.status === "replaced" ? "🗑️" : "🆕";
-      const sensitivity = t.dataSensitivity ? ` 🔒${clip(t.dataSensitivity, 14)}` : "";
+      const sensitivity = t.dataSensitivity ? ` [${clip(t.dataSensitivity, 14)}]` : "";
       const cost = costFor(t.name, lineItems);
       const label = `${badge} ${clip(t.name, 28)}${sensitivity}${cost ? `\n${cost}` : ""}`;
       const type = t.status === "existing" ? "stack" : t.status === "replaced" ? "risk" : "tool";
@@ -111,9 +111,9 @@ export function buildArchitectureFlow(solution: any): ArchitectureFlow {
   // dashed lines from every control to every environment were pure clutter.
   const controls: any[] = (solution?.approvals?.itControls ?? []).slice(0, 3);
   if (controls.length) {
-    groups.push({ id: "security", label: "🛡️ Security & Access (applies to all)", accent: "slate" });
+    groups.push({ id: "security", label: "Security & Access (applies to all)", accent: "slate" });
     controls.forEach((c, i) => {
-      nodes.push({ id: `sec${i}`, label: `🛡️ ${clip(c.name, 30)}`, type: "team", group: "security" });
+      nodes.push({ id: `sec${i}`, label: clip(c.name, 30), type: "team", group: "security" });
     });
   }
 

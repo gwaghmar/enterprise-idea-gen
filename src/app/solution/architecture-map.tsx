@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Copy, FileDown, Check } from "lucide-react";
+import { Copy, FileDown, Check, Lock } from "lucide-react";
 import ArchDiagram from "@/components/ArchDiagram";
 import { buildArchModel } from "@/lib/arch-stages";
 import { buildArchitectureFlow } from "@/lib/generate-architecture";
@@ -40,7 +40,7 @@ export default function ArchitectureMap({ solution }: { solution: any }) {
     <div data-architecture-map>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <p className="text-white/40 text-xs">
-          How data moves: sources → ingestion → platform → consumers. Cloud zones tinted; 🔒 marks where sensitive data lives.
+          How data moves: sources → ingestion → platform → consumers. Cloud zones tinted; <Lock className="inline w-3 h-3 -mt-0.5" /> marks where sensitive data lives.
         </p>
         <div className="flex gap-2">
           <button onClick={copyCode}
