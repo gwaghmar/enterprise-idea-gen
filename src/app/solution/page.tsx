@@ -446,6 +446,8 @@ export default function SolutionPage() {
   const [citations, setCitations] = useState<string[]>([]);
   const [sourceMeta, setSourceMeta] = useState<Record<string, string>>({});
   const [remixing, setRemixing] = useState<string | null>(null);
+  // Evaluated cards flip to show the full verdict — tracked per card index
+  const [flippedEval, setFlippedEval] = useState<Record<number, boolean>>({});
   const [swapTool, setSwapTool] = useState<number | null>(null);
   const [techSwapOpen, setTechSwapOpen] = useState(false);
   const [askSel, setAskSel] = useState<{ text: string; x: number; y: number } | null>(null);
@@ -992,12 +994,16 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
         <div className="mb-12 bg-gradient-to-br from-white/5 to-white/2 border border-white/15 rounded-2xl p-6">
           <p className="text-white/40 text-xs uppercase tracking-wider mb-4">Executive Summary</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            {/* A metric with no value is dropped, never rendered as an empty
+                box — a repaired/partial report was leaving blank cells under
+                the labels and "6 tools" sitting beneath a money label */}
             {[
-              { label: "Est. Monthly Cost", value: solution.estimatedCost },
-              { label: "First-Year Total", value: solution.tco?.firstYearTotal ?? `${solution.tools.length} tools` },
+              { label: "Est. Monthly Cost", value: solution.estimatedCost || solution.tco?.monthlyRecurring },
+              { label: "First-Year Total", value: solution.tco?.firstYearTotal },
               { label: "Time to Implement", value: solution.timeToImplement },
-              { label: "Implementation Phases", value: `${solution.phases.length} phases` },
-            ].map((m) => (
+              { label: "Tool Stack", value: solution.tools.length ? `${solution.tools.length} tools` : "" },
+              { label: "Implementation Phases", value: solution.phases.length ? `${solution.phases.length} phases` : "" },
+            ].filter((m) => m.value && m.value.trim()).slice(0, 4).map((m) => (
               <MetricBox key={m.label} label={m.label} value={m.value} />
             ))}
           </div>
@@ -1357,33 +1363,49 @@ ${url ? `<p>Full interactive report: <a href="${url}">${url}</a></p>` : ""}
             <p className="text-white/40 text-sm mb-4">{solution.evaluated.length} real candidates assessed against your stack, budget, and team — here&apos;s why each won or lost.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {solution.evaluated.map((c, i) => {
-                const swappable = c.verdict !== "chosen";
+                const chosen = c.verdict === "chosen";
+                const flipped = !!flippedEval[i];
+                const toggle = () => setFlippedEval((f) => ({ ...f, [i]: !f[i] }));
                 const doSwap = () => handleSwap("the currently chosen tools it lost to", `Use ${c.name} as the primary solution instead`);
                 return (
-                // The whole rejected card is the click target — border lifts and
-                // the arrow slides on hover so it reads as clickable, not static
+                // Tapping the card flips it to the full verdict — it never
+                // triggers a rebuild; only the explicit "Try X instead" does
                 <div key={i}
-                  role={swappable ? "button" : undefined}
-                  tabIndex={swappable ? 0 : undefined}
-                  onClick={swappable && !remixing ? doSwap : undefined}
-                  onKeyDown={swappable && !remixing ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); doSwap(); } } : undefined}
-                  className={`group rounded-xl border px-4 py-3 transition-all ${c.verdict === "chosen"
-                    ? "border-blue-500/30 bg-blue-500/5"
-                    : "border-white/10 bg-white/3 cursor-pointer hover:border-blue-400/50 hover:bg-white/[0.06] focus-visible:border-blue-400/60 focus-visible:outline-none"}`}>
+                  role="button"
+                  tabIndex={0}
+                  onClick={toggle}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}
+                  className={`group rounded-xl border px-4 py-3 transition-all cursor-pointer focus-visible:outline-none ${chosen
+                    ? "border-blue-500/30 bg-blue-500/5 hover:border-blue-400/50 focus-visible:border-blue-400/60"
+                    : "border-white/10 bg-white/3 hover:border-white/30 hover:bg-white/[0.06] focus-visible:border-white/40"}`}>
                   <div className="flex items-center gap-2 mb-0.5">
-                    {c.verdict === "chosen"
+                    {chosen
                       ? <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                       : <Circle className="w-3.5 h-3.5 text-white/25 shrink-0" />}
                     <span className="text-sm font-medium text-white">{c.name}</span>
-                    <span className={`ml-auto text-[10px] uppercase tracking-wider ${c.verdict === "chosen" ? "text-blue-400" : "text-white/30"}`}>{c.verdict}</span>
+                    <span className={`ml-auto text-[10px] uppercase tracking-wider ${chosen ? "text-blue-400" : "text-white/30"}`}>{c.verdict}</span>
                   </div>
-                  <p className="text-white/50 text-xs">{c.reason} <SourcePill url={c.sourceUrl} /></p>
-                  {swappable && (
-                    <button onClick={(e) => { e.stopPropagation(); doSwap(); }}
-                      disabled={!!remixing}
-                      className="mt-1.5 text-[11px] text-blue-400/80 group-hover:text-blue-300 disabled:opacity-40 transition-colors">
-                      {remixing === "swap:the currently chosen tools it lost to" ? "Rebuilding…" : <>Try {c.name} instead <span className="inline-block transition-transform group-hover:translate-x-0.5">→</span></>}
-                    </button>
+                  {flipped ? (
+                    <div className="animate-in fade-in duration-200">
+                      <p className={`text-[10px] uppercase tracking-wider mb-1 ${chosen ? "text-blue-400/70" : "text-white/35"}`}>
+                        {chosen ? "Why we chose it" : "Why it lost"}
+                      </p>
+                      <p className="text-white/60 text-xs">{c.reason} <SourcePill url={c.sourceUrl} /></p>
+                      {!chosen && (
+                        <button onClick={(e) => { e.stopPropagation(); doSwap(); }}
+                          disabled={!!remixing}
+                          className="mt-2 text-[11px] text-blue-400/80 hover:text-blue-300 disabled:opacity-40 transition-colors">
+                          {remixing === "swap:the currently chosen tools it lost to" ? "Rebuilding…" : <>Rebuild the plan around {c.name} instead →</>}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-white/50 text-xs line-clamp-2">{c.reason}</p>
+                      <p className="mt-1.5 text-[11px] text-white/30 group-hover:text-white/60 transition-colors">
+                        Tap — {chosen ? "why we chose it" : "why it lost"} ↓
+                      </p>
+                    </>
                   )}
                 </div>
                 );
